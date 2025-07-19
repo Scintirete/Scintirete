@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/scintirete/scintirete/internal/core"
+	"github.com/scintirete/scintirete/internal/observability/logger"
 	"github.com/scintirete/scintirete/internal/persistence/aof"
 	"github.com/scintirete/scintirete/internal/persistence/rdb"
 	"github.com/scintirete/scintirete/internal/utils"
@@ -20,6 +22,7 @@ type Manager struct {
 	backupManager *rdb.BackupManager
 	cmdBuilder    *aof.CommandBuilder
 	cmdApplier    *CommandApplier
+	logger        core.Logger // Add logger field
 
 	// Configuration
 	config Config
@@ -43,6 +46,9 @@ type Config struct {
 	RDBInterval     time.Duration // How often to create RDB snapshots
 	AOFRewriteSize  int64         // Rewrite AOF when it exceeds this size
 	BackupRetention int           // Number of backups to keep
+
+	// Optional: Logger for persistence component
+	Logger core.Logger
 }
 
 // Stats contains persistence statistics
@@ -97,6 +103,21 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 		config.BackupRetention = 7 // Keep 7 backups by default
 	}
 
+	// Create default logger if not provided in config
+	var persistenceLogger core.Logger
+	if config.Logger != nil {
+		persistenceLogger = config.Logger
+	} else {
+		// Create a default logger with INFO level and JSON format
+		defaultLogger, err := logger.NewFromConfigString("info", "json")
+		if err != nil {
+			return nil, utils.ErrPersistenceFailedWithCause("failed to create default logger", err)
+		}
+		persistenceLogger = defaultLogger.WithFields(map[string]interface{}{
+			"component": "persistence",
+		})
+	}
+
 	manager := &Manager{
 		aofLogger:     aofLogger,
 		rdbManager:    rdbManager,
@@ -104,6 +125,7 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 		cmdBuilder:    aof.NewCommandBuilder(),
 		config:        config,
 		stopTasks:     make(chan struct{}),
+		logger:        persistenceLogger,
 	}
 
 	// Set up command applier if database engine is provided
@@ -337,13 +359,13 @@ func (m *Manager) runRDBSnapshotTask(ctx context.Context) {
 				databases, err := m.cmdApplier.GetDatabaseState(ctx)
 				if err != nil {
 					// Log error but continue running
-					// TODO: Add proper logging
+					m.logger.Error(ctx, "failed to get database state for RDB snapshot", err, nil)
 					continue
 				}
 
 				if err := m.SaveSnapshot(ctx, databases); err != nil {
 					// Log error but continue running
-					// TODO: Add proper logging
+					m.logger.Error(ctx, "failed to save RDB snapshot", err, nil)
 				}
 			}
 
@@ -372,13 +394,13 @@ func (m *Manager) runAOFRewriteTask(ctx context.Context) {
 					commands, err := m.cmdApplier.GetOptimizedCommands(ctx)
 					if err != nil {
 						// Log error but continue running
-						// TODO: Add proper logging
+						m.logger.Error(ctx, "failed to get optimized commands for AOF rewrite", err, nil)
 						continue
 					}
 
 					if err := m.RewriteAOF(ctx, commands); err != nil {
 						// Log error but continue running
-						// TODO: Add proper logging
+						m.logger.Error(ctx, "failed to rewrite AOF", err, nil)
 					}
 				}
 			}

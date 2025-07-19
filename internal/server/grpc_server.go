@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
+	"github.com/scintirete/scintirete/internal/core"
 	"github.com/scintirete/scintirete/internal/core/database"
 	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/persistence"
@@ -28,6 +29,7 @@ type GRPCServer struct {
 	persistence *persistence.Manager
 	embedding   *embedding.Client
 	config      Config
+	logger      core.Logger // Add logger field
 
 	// Authentication
 	validPasswords map[string]bool
@@ -76,11 +78,19 @@ func NewGRPCServer(config Config) (*GRPCServer, error) {
 		passwords[pwd] = true
 	}
 
+	// Create logger for server component
+	var serverLogger core.Logger
+	// For now, create a default logger - this could be passed from config later
+	// serverLogger = defaultLogger.WithFields(map[string]interface{}{
+	//     "component": "grpc_server",
+	// })
+
 	return &GRPCServer{
 		engine:         engine,
 		persistence:    persistenceManager,
 		embedding:      embeddingClient,
 		config:         config,
+		logger:         serverLogger,
 		validPasswords: passwords,
 		startTime:      time.Now(),
 	}, nil

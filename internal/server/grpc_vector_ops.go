@@ -305,8 +305,8 @@ func (s *GRPCServer) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertR
 	}
 
 	if err := s.persistence.WriteAOF(ctx, command); err != nil {
-		// Log error but don't fail the operation
-		// TODO: Add proper logging
+		// Log error but don't fail the operation - AOF write failure shouldn't block operation
+		// TODO: Add proper error handling and logging when logger system is fully integrated
 	}
 
 	return &emptypb.Empty{}, nil
