@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -242,9 +243,73 @@ func (s *GRPCServer) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertR
 		return nil, status.Error(codes.InvalidArgument, "no texts provided")
 	}
 
-	// TODO: Implement embedding API integration
-	// For now, return not implemented
-	return nil, status.Error(codes.Unimplemented, "embedding API integration not yet implemented")
+	// Convert protobuf texts to types.TextWithMetadata
+	texts := make([]types.TextWithMetadata, len(req.Texts))
+	for i, text := range req.Texts {
+		metadata := make(map[string]interface{})
+		if text.Metadata != nil {
+			metadata = text.Metadata.AsMap()
+		}
+		texts[i] = types.TextWithMetadata{
+			ID:       text.Id,
+			Text:     text.Text,
+			Metadata: metadata,
+		}
+	}
+
+	// Get embedding model (use default if not specified)
+	model := "text-embedding-ada-002" // Default model
+	if req.EmbeddingModel != nil {
+		model = *req.EmbeddingModel
+	}
+
+	// Convert texts to vectors using embedding API
+	vectors, err := s.embedding.ConvertTextsToVectors(ctx, texts, model)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get embeddings: %v", err)
+	}
+
+	// Get database
+	db, err := s.engine.GetDatabase(ctx, req.DbName)
+	if err != nil {
+		if isNotFoundError(err) {
+			return nil, status.Error(codes.NotFound, "database not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get database: %v", err)
+	}
+
+	// Get collection
+	coll, err := db.GetCollection(ctx, req.CollectionName)
+	if err != nil {
+		if isNotFoundError(err) {
+			return nil, status.Error(codes.NotFound, "collection not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get collection: %v", err)
+	}
+
+	// Insert vectors
+	if err := coll.Insert(ctx, vectors); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to insert vectors: %v", err)
+	}
+
+	// Log the operation to AOF
+	command := types.AOFCommand{
+		Timestamp:  time.Now(),
+		Command:    "EmbedAndInsert",
+		Database:   req.DbName,
+		Collection: req.CollectionName,
+		Args: map[string]interface{}{
+			"texts": texts,
+			"model": model,
+		},
+	}
+
+	if err := s.persistence.WriteAOF(ctx, command); err != nil {
+		// Log error but don't fail the operation
+		// TODO: Add proper logging
+	}
+
+	return &emptypb.Empty{}, nil
 }
 
 // EmbedAndSearch processes query text through embedding API and performs search
@@ -268,7 +333,101 @@ func (s *GRPCServer) EmbedAndSearch(ctx context.Context, req *pb.EmbedAndSearchR
 		return nil, status.Error(codes.InvalidArgument, "top_k must be positive")
 	}
 
-	// TODO: Implement embedding API integration
-	// For now, return not implemented
-	return nil, status.Error(codes.Unimplemented, "embedding API integration not yet implemented")
+	// Get embedding model (use default if not specified)
+	model := "text-embedding-ada-002" // Default model
+	if req.EmbeddingModel != nil {
+		model = *req.EmbeddingModel
+	}
+
+	// Get embedding for query text
+	queryEmbedding, err := s.embedding.GetSingleEmbedding(ctx, req.QueryText, model)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get query embedding: %v", err)
+	}
+
+	// Get database
+	db, err := s.engine.GetDatabase(ctx, req.DbName)
+	if err != nil {
+		if isNotFoundError(err) {
+			return nil, status.Error(codes.NotFound, "database not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get database: %v", err)
+	}
+
+	// Get collection
+	coll, err := db.GetCollection(ctx, req.CollectionName)
+	if err != nil {
+		if isNotFoundError(err) {
+			return nil, status.Error(codes.NotFound, "collection not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get collection: %v", err)
+	}
+
+	// Prepare search parameters
+	searchParams := types.SearchParams{
+		TopK: int(req.TopK),
+	}
+	if req.EfSearch != nil {
+		efSearch := int(*req.EfSearch)
+		searchParams.EfSearch = &efSearch
+	}
+
+	// Perform search
+	results, err := coll.Search(ctx, queryEmbedding, searchParams)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to perform search: %v", err)
+	}
+
+	// Convert results to protobuf format
+	pbResults := make([]*pb.SearchResultItem, len(results))
+	for i, result := range results {
+		pbResults[i] = &pb.SearchResultItem{
+			Vector: &pb.Vector{
+				Id:       result.Vector.ID,
+				Elements: result.Vector.Elements,
+				Metadata: mapToStruct(result.Vector.Metadata),
+			},
+			Distance: result.Distance,
+		}
+	}
+
+	return &pb.SearchResponse{
+		Results: pbResults,
+	}, nil
+}
+
+// Helper functions
+
+// isNotFoundError checks if an error is a "not found" type error
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if it's a ScintireteError with appropriate code
+	if scintireteErr, ok := err.(*utils.ScintireteError); ok {
+		switch scintireteErr.Code {
+		case utils.ErrorCodeDatabaseNotFound,
+			utils.ErrorCodeCollectionNotFound,
+			utils.ErrorCodeVectorNotFound:
+			return true
+		}
+	}
+
+	return false
+}
+
+// mapToStruct converts a map[string]interface{} to *structpb.Struct
+func mapToStruct(m map[string]interface{}) *structpb.Struct {
+	if m == nil {
+		return nil
+	}
+
+	s, err := structpb.NewStruct(m)
+	if err != nil {
+		// Return empty struct if conversion fails
+		return &structpb.Struct{}
+	}
+
+	return s
 }

@@ -7,12 +7,16 @@ import (
 	"time"
 
 	"github.com/scintirete/scintirete/internal/core/database"
+	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/server"
 	"github.com/scintirete/scintirete/pkg/types"
 )
 
 func TestFullStackIntegration(t *testing.T) {
+	// Set up fake embedding API key for testing
+	t.Setenv("OPENAI_API_KEY", "fake-api-key-for-testing")
+
 	// Create temporary directory for test data
 	tempDir := t.TempDir()
 
@@ -27,6 +31,12 @@ func TestFullStackIntegration(t *testing.T) {
 			RDBInterval:     time.Minute,
 			AOFRewriteSize:  1024 * 1024,
 			BackupRetention: 3,
+		},
+		EmbeddingConfig: embedding.Config{
+			BaseURL:      "https://api.test.com/v1/embeddings", // Use fake URL for testing
+			APIKeyEnvVar: "OPENAI_API_KEY",
+			RPMLimit:     100,
+			TPMLimit:     10000,
 		},
 		EnableMetrics:  false,
 		EnableAuditLog: false,

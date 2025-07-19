@@ -19,16 +19,17 @@ type Manager struct {
 	rdbManager    *rdb.RDBManager
 	backupManager *rdb.BackupManager
 	cmdBuilder    *aof.CommandBuilder
-	
+	cmdApplier    *CommandApplier
+
 	// Configuration
-	config        Config
-	
+	config Config
+
 	// Background tasks
-	stopTasks     chan struct{}
-	taskWG        sync.WaitGroup
-	
+	stopTasks chan struct{}
+	taskWG    sync.WaitGroup
+
 	// Statistics
-	stats         Stats
+	stats Stats
 }
 
 // Config contains persistence configuration
@@ -37,27 +38,32 @@ type Config struct {
 	RDBFilename     string
 	AOFFilename     string
 	AOFSyncStrategy string
-	
+
 	// Background task intervals
-	RDBInterval    time.Duration // How often to create RDB snapshots
-	AOFRewriteSize int64         // Rewrite AOF when it exceeds this size
-	BackupRetention int          // Number of backups to keep
+	RDBInterval     time.Duration // How often to create RDB snapshots
+	AOFRewriteSize  int64         // Rewrite AOF when it exceeds this size
+	BackupRetention int           // Number of backups to keep
 }
 
 // Stats contains persistence statistics
 type Stats struct {
 	AOFStats aof.AOFStats `json:"aof_stats"`
 	RDBInfo  *rdb.RDBInfo `json:"rdb_info"`
-	
+
 	LastRDBSave    time.Time `json:"last_rdb_save"`
 	LastAOFRewrite time.Time `json:"last_aof_rewrite"`
-	
-	RecoveryTime   time.Duration `json:"recovery_time"`
-	RecoveredCommands int64      `json:"recovered_commands"`
+
+	RecoveryTime      time.Duration `json:"recovery_time"`
+	RecoveredCommands int64         `json:"recovered_commands"`
 }
 
 // NewManager creates a new persistence manager
 func NewManager(config Config) (*Manager, error) {
+	return NewManagerWithEngine(config, nil)
+}
+
+// NewManagerWithEngine creates a new persistence manager with database engine support
+func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, error) {
 	// Create AOF logger
 	aofPath := config.DataDir + "/" + config.AOFFilename
 	syncStrategy := aof.SyncStrategy(config.AOFSyncStrategy)
@@ -65,21 +71,21 @@ func NewManager(config Config) (*Manager, error) {
 	if err != nil {
 		return nil, utils.ErrPersistenceFailedWithCause("failed to create AOF logger", err)
 	}
-	
+
 	// Create RDB manager
 	rdbPath := config.DataDir + "/" + config.RDBFilename
 	rdbManager, err := rdb.NewRDBManager(rdbPath)
 	if err != nil {
 		return nil, utils.ErrPersistenceFailedWithCause("failed to create RDB manager", err)
 	}
-	
+
 	// Create backup manager
 	backupDir := config.DataDir + "/backups"
 	backupManager, err := rdb.NewBackupManager(rdbManager, backupDir)
 	if err != nil {
 		return nil, utils.ErrPersistenceFailedWithCause("failed to create backup manager", err)
 	}
-	
+
 	// Set default intervals if not specified
 	if config.RDBInterval == 0 {
 		config.RDBInterval = 5 * time.Minute // Default: save RDB every 5 minutes
@@ -90,15 +96,22 @@ func NewManager(config Config) (*Manager, error) {
 	if config.BackupRetention == 0 {
 		config.BackupRetention = 7 // Keep 7 backups by default
 	}
-	
-	return &Manager{
+
+	manager := &Manager{
 		aofLogger:     aofLogger,
 		rdbManager:    rdbManager,
 		backupManager: backupManager,
 		cmdBuilder:    aof.NewCommandBuilder(),
 		config:        config,
 		stopTasks:     make(chan struct{}),
-	}, nil
+	}
+
+	// Set up command applier if database engine is provided
+	if dbEngine != nil {
+		manager.cmdApplier = NewCommandApplier(dbEngine)
+	}
+
+	return manager, nil
 }
 
 // WriteAOF writes a command to the append-only file
@@ -121,36 +134,44 @@ func (m *Manager) Recover(ctx context.Context) error {
 	startTime := time.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	commandCount := int64(0)
-	
+
 	// Step 1: Load RDB snapshot if it exists
 	snapshot, err := m.rdbManager.Load(ctx)
 	if err != nil {
 		return utils.ErrRecoveryFailed("failed to load RDB snapshot: " + err.Error())
 	}
-	
+
 	if snapshot != nil {
-		// TODO: Apply RDB snapshot to database engine
-		// This will be implemented when we have the database engine
+		// Apply RDB snapshot to database engine if command applier is available
+		if m.cmdApplier != nil {
+			if err := m.cmdApplier.ApplySnapshot(ctx, snapshot); err != nil {
+				return utils.ErrRecoveryFailed("failed to apply RDB snapshot: " + err.Error())
+			}
+		}
 	}
-	
+
 	// Step 2: Replay AOF commands
 	err = m.aofLogger.Replay(ctx, func(command types.AOFCommand) error {
 		commandCount++
-		// TODO: Apply command to database engine
-		// This will be implemented when we have the database engine
+		// Apply command to database engine if command applier is available
+		if m.cmdApplier != nil {
+			if err := m.cmdApplier.ApplyCommand(ctx, command); err != nil {
+				return utils.ErrRecoveryFailed("failed to apply AOF command: " + err.Error())
+			}
+		}
 		return nil
 	})
-	
+
 	if err != nil {
 		return utils.ErrRecoveryFailed("failed to replay AOF: " + err.Error())
 	}
-	
+
 	// Update statistics
 	m.stats.RecoveryTime = time.Since(startTime)
 	m.stats.RecoveredCommands = commandCount
-	
+
 	return nil
 }
 
@@ -158,15 +179,15 @@ func (m *Manager) Recover(ctx context.Context) error {
 func (m *Manager) SaveSnapshot(ctx context.Context, databases map[string]rdb.DatabaseState) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Create snapshot
 	snapshot := m.rdbManager.CreateSnapshot(databases)
-	
+
 	// Save to disk
 	if err := m.rdbManager.Save(ctx, snapshot); err != nil {
 		return err
 	}
-	
+
 	m.stats.LastRDBSave = time.Now()
 	return nil
 }
@@ -174,13 +195,13 @@ func (m *Manager) SaveSnapshot(ctx context.Context, databases map[string]rdb.Dat
 // StartBackgroundTasks starts periodic snapshot and AOF rewrite tasks
 func (m *Manager) StartBackgroundTasks(ctx context.Context) error {
 	m.taskWG.Add(2)
-	
+
 	// Start RDB snapshot task
 	go m.runRDBSnapshotTask(ctx)
-	
+
 	// Start AOF rewrite task
 	go m.runAOFRewriteTask(ctx)
-	
+
 	return nil
 }
 
@@ -189,27 +210,47 @@ func (m *Manager) Stop(ctx context.Context) error {
 	// Stop background tasks
 	close(m.stopTasks)
 	m.taskWG.Wait()
-	
+
 	// Close persistence components
 	if err := m.aofLogger.Close(); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to close AOF logger", err)
 	}
-	
+
 	return nil
+}
+
+// SetDatabaseEngine sets the database engine for persistence operations
+func (m *Manager) SetDatabaseEngine(engine DatabaseEngine) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if engine != nil {
+		m.cmdApplier = NewCommandApplier(engine)
+	} else {
+		m.cmdApplier = nil
+	}
+}
+
+// HasDatabaseEngine returns true if a database engine is configured
+func (m *Manager) HasDatabaseEngine() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.cmdApplier != nil
 }
 
 // GetStats returns current persistence statistics
 func (m *Manager) GetStats() Stats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	stats := m.stats
 	stats.AOFStats = m.aofLogger.GetStats()
-	
+
 	if rdbInfo, err := m.rdbManager.GetInfo(); err == nil {
 		stats.RDBInfo = rdbInfo
 	}
-	
+
 	return stats
 }
 
@@ -232,11 +273,11 @@ func (m *Manager) RestoreFromBackup(ctx context.Context, backupPath string) erro
 func (m *Manager) RewriteAOF(ctx context.Context, commands []types.AOFCommand) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if err := m.aofLogger.Rewrite(ctx, commands); err != nil {
 		return err
 	}
-	
+
 	m.stats.LastAOFRewrite = time.Now()
 	return nil
 }
@@ -284,16 +325,28 @@ func (m *Manager) LogDeleteVectors(ctx context.Context, dbName, collName string,
 // runRDBSnapshotTask runs periodic RDB snapshots
 func (m *Manager) runRDBSnapshotTask(ctx context.Context) {
 	defer m.taskWG.Done()
-	
+
 	ticker := time.NewTicker(m.config.RDBInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
-			// TODO: Get current database state and create snapshot
-			// This will be implemented when we have the database engine
-			
+			// Get current database state and create snapshot if command applier is available
+			if m.cmdApplier != nil {
+				databases, err := m.cmdApplier.GetDatabaseState(ctx)
+				if err != nil {
+					// Log error but continue running
+					// TODO: Add proper logging
+					continue
+				}
+
+				if err := m.SaveSnapshot(ctx, databases); err != nil {
+					// Log error but continue running
+					// TODO: Add proper logging
+				}
+			}
+
 		case <-m.stopTasks:
 			return
 		case <-ctx.Done():
@@ -305,19 +358,31 @@ func (m *Manager) runRDBSnapshotTask(ctx context.Context) {
 // runAOFRewriteTask monitors AOF size and triggers rewrites
 func (m *Manager) runAOFRewriteTask(ctx context.Context) {
 	defer m.taskWG.Done()
-	
+
 	ticker := time.NewTicker(time.Minute) // Check every minute
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
 			stats := m.aofLogger.GetStats()
 			if stats.FileSize > m.config.AOFRewriteSize {
-				// TODO: Get optimized commands and rewrite AOF
-				// This will be implemented when we have the database engine
+				// Get optimized commands and rewrite AOF if command applier is available
+				if m.cmdApplier != nil {
+					commands, err := m.cmdApplier.GetOptimizedCommands(ctx)
+					if err != nil {
+						// Log error but continue running
+						// TODO: Add proper logging
+						continue
+					}
+
+					if err := m.RewriteAOF(ctx, commands); err != nil {
+						// Log error but continue running
+						// TODO: Add proper logging
+					}
+				}
 			}
-			
+
 		case <-m.stopTasks:
 			return
 		case <-ctx.Done():
@@ -346,33 +411,33 @@ func ValidateConfig(config Config) error {
 	if config.DataDir == "" {
 		return utils.ErrConfig("data directory cannot be empty")
 	}
-	
+
 	if config.RDBFilename == "" {
 		return utils.ErrConfig("RDB filename cannot be empty")
 	}
-	
+
 	if config.AOFFilename == "" {
 		return utils.ErrConfig("AOF filename cannot be empty")
 	}
-	
+
 	validStrategies := map[string]bool{
 		"always": true, "everysec": true, "no": true,
 	}
 	if !validStrategies[config.AOFSyncStrategy] {
 		return utils.ErrConfig("invalid AOF sync strategy: " + config.AOFSyncStrategy)
 	}
-	
+
 	if config.RDBInterval <= 0 {
 		return utils.ErrConfig("RDB interval must be positive")
 	}
-	
+
 	if config.AOFRewriteSize <= 0 {
 		return utils.ErrConfig("AOF rewrite size must be positive")
 	}
-	
+
 	if config.BackupRetention <= 0 {
 		return utils.ErrConfig("backup retention must be positive")
 	}
-	
+
 	return nil
-} 
+}

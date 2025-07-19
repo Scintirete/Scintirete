@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 	"github.com/scintirete/scintirete/internal/core/database"
+	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/utils"
 	"github.com/scintirete/scintirete/pkg/types"
@@ -25,6 +26,7 @@ type GRPCServer struct {
 	mu          sync.RWMutex
 	engine      *database.Engine
 	persistence *persistence.Manager
+	embedding   *embedding.Client
 	config      Config
 
 	// Authentication
@@ -43,6 +45,9 @@ type Config struct {
 	// Persistence
 	PersistenceConfig persistence.Config `toml:"persistence"`
 
+	// Embedding
+	EmbeddingConfig embedding.Config `toml:"embedding"`
+
 	// Features
 	EnableMetrics  bool `toml:"enable_metrics"`
 	EnableAuditLog bool `toml:"enable_audit_log"`
@@ -59,6 +64,12 @@ func NewGRPCServer(config Config) (*GRPCServer, error) {
 		return nil, fmt.Errorf("failed to create persistence manager: %w", err)
 	}
 
+	// Create embedding client
+	embeddingClient, err := embedding.NewClient(config.EmbeddingConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create embedding client: %w", err)
+	}
+
 	// Create password map for O(1) lookup
 	passwords := make(map[string]bool)
 	for _, pwd := range config.Passwords {
@@ -68,6 +79,7 @@ func NewGRPCServer(config Config) (*GRPCServer, error) {
 	return &GRPCServer{
 		engine:         engine,
 		persistence:    persistenceManager,
+		embedding:      embeddingClient,
 		config:         config,
 		validPasswords: passwords,
 		startTime:      time.Now(),

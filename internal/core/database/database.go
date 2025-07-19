@@ -18,9 +18,11 @@ type Engine struct {
 	databases map[string]*Database
 
 	// Statistics
-	startTime  time.Time
-	totalOps   int64
-	lastOpTime time.Time
+	startTime       time.Time
+	totalOps        int64
+	lastOpTime      time.Time
+	totalDuration   time.Duration
+	averageDuration time.Duration
 }
 
 // NewEngine creates a new database engine
@@ -33,6 +35,7 @@ func NewEngine() *Engine {
 
 // CreateDatabase creates a new database
 func (e *Engine) CreateDatabase(ctx context.Context, name string) error {
+	startTime := time.Now()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -42,13 +45,14 @@ func (e *Engine) CreateDatabase(ctx context.Context, name string) error {
 
 	db := NewDatabase(name)
 	e.databases[name] = db
-	e.updateStats()
+	e.updateStatsWithDuration(time.Since(startTime))
 
 	return nil
 }
 
 // DropDatabase removes a database and all its collections
 func (e *Engine) DropDatabase(ctx context.Context, name string) error {
+	startTime := time.Now()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -63,7 +67,7 @@ func (e *Engine) DropDatabase(ctx context.Context, name string) error {
 	}
 
 	delete(e.databases, name)
-	e.updateStats()
+	e.updateStatsWithDuration(time.Since(startTime))
 
 	return nil
 }
@@ -83,8 +87,15 @@ func (e *Engine) GetDatabase(ctx context.Context, name string) (core.Database, e
 
 // ListDatabases returns a list of all database names
 func (e *Engine) ListDatabases(ctx context.Context) ([]string, error) {
+	startTime := time.Now()
 	e.mu.RLock()
-	defer e.mu.RUnlock()
+	defer func() {
+		e.mu.RUnlock()
+		// Update stats after unlock to avoid deadlock
+		e.mu.Lock()
+		e.updateStatsWithDuration(time.Since(startTime))
+		e.mu.Unlock()
+	}()
 
 	names := make([]string, 0, len(e.databases))
 	for name := range e.databases {
@@ -117,7 +128,7 @@ func (e *Engine) GetStats(ctx context.Context) (types.DatabaseStats, error) {
 		TotalDatabases:   len(e.databases),
 		MemoryUsage:      totalMemory,
 		RequestsTotal:    e.totalOps,
-		RequestDuration:  0, // TODO: calculate average duration
+		RequestDuration:  float64(e.averageDuration.Nanoseconds()) / 1e6, // Convert to milliseconds
 	}, nil
 }
 
@@ -144,6 +155,16 @@ func (e *Engine) Close(ctx context.Context) error {
 func (e *Engine) updateStats() {
 	e.totalOps++
 	e.lastOpTime = time.Now()
+}
+
+// updateStatsWithDuration updates internal statistics with request duration
+func (e *Engine) updateStatsWithDuration(duration time.Duration) {
+	e.totalOps++
+	e.lastOpTime = time.Now()
+	e.totalDuration += duration
+	if e.totalOps > 0 {
+		e.averageDuration = e.totalDuration / time.Duration(e.totalOps)
+	}
 }
 
 // Database represents a single database containing multiple collections

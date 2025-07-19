@@ -308,8 +308,10 @@ func (c *Collection) Compact(ctx context.Context) error {
 	c.updatedAt = time.Now()
 	c.updateMemoryUsage()
 
-	// TODO: Rebuild index if needed
-	// This is a complex operation that might require recreating the entire index
+	// Rebuild index after compaction
+	if err := c.rebuildIndex(ctx); err != nil {
+		return utils.ErrCollectionOperationFailed("failed to rebuild index after compaction: " + err.Error())
+	}
 
 	return nil
 }
@@ -429,6 +431,48 @@ func (c *Collection) updateMemoryUsage() {
 	}
 
 	c.memoryBytes = totalBytes
+}
+
+// rebuildIndex rebuilds the vector index from scratch
+func (c *Collection) rebuildIndex(ctx context.Context) error {
+	if len(c.vectors) == 0 {
+		// No vectors to index
+		return nil
+	}
+
+	// Get dimension from first vector
+	expectedDim := c.getDimension()
+	if expectedDim == 0 {
+		return nil // No vectors with valid dimensions
+	}
+
+	// Create new index
+	newIndex, err := algorithm.NewHNSW(c.config.HNSWParams, c.config.Metric)
+	if err != nil {
+		return err
+	}
+
+	// Collect all non-deleted vectors
+	vectors := make([]types.Vector, 0, len(c.vectors))
+	for _, vector := range c.vectors {
+		// Skip deleted vectors
+		if c.deletedIDs[vector.ID] {
+			continue
+		}
+		vectors = append(vectors, *vector)
+	}
+
+	// Build the index with all vectors
+	if len(vectors) > 0 {
+		if err := newIndex.Build(ctx, vectors); err != nil {
+			return err
+		}
+	}
+
+	// Replace the old index
+	c.index = newIndex
+
+	return nil
 }
 
 // validateCollectionConfig validates the collection configuration

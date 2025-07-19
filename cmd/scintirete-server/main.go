@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -116,11 +117,20 @@ func main() {
 		}
 	}()
 
-	// TODO: HTTP gateway will be implemented when protobuf generates gateway code
-	log.Printf("HTTP gateway support will be added in future version")
+	// Start HTTP gateway server
+	httpServer := server.NewHTTPServer(grpcServer)
+	httpAddr := cfg.GetHTTPAddress()
+
+	go func() {
+		log.Printf("Starting HTTP server on %s", httpAddr)
+		if err := http.ListenAndServe(httpAddr, httpServer); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to serve HTTP: %v", err)
+		}
+	}()
 
 	log.Printf("Scintirete server started successfully")
 	log.Printf("gRPC endpoint: %s", grpcAddr)
+	log.Printf("HTTP endpoint: %s", httpAddr)
 
 	// Wait for shutdown signal
 	<-shutdown
