@@ -1,6 +1,6 @@
 # Scintirete Makefile
 
-.PHONY: all build test clean proto-gen lint format vet help server cli deps
+.PHONY: all build test test-coverage test-integration benchmark clean proto-gen lint format vet help server cli deps docker docker-compose
 .DEFAULT_GOAL := help
 
 # 基本配置
@@ -73,19 +73,24 @@ cli: proto-gen ## 只构建客户端
 	@mkdir -p $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/$(CLI_BINARY) ./cmd/scintirete-cli
 
-test: ## 运行测试
+test: proto-gen ## 运行测试
 	@echo "Running tests..."
 	$(GO) test -v -race -cover ./...
 
-test-coverage: ## 运行测试并生成覆盖率报告
+test-coverage: proto-gen ## 运行测试并生成覆盖率报告
 	@echo "Running tests with coverage..."
-	$(GO) test -v -race -coverprofile=coverage.out ./...
+	$(GO) test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-benchmark: ## 运行性能测试
-	@echo "Running benchmarks..."
-	$(GO) test -bench=. -benchmem ./...
+test-integration: proto-gen ## 运行集成测试
+	@echo "Running integration tests..."
+	$(GO) test -v -tags=integration ./test/integration/...
+
+benchmark: proto-gen ## 运行基准测试  
+	@echo "Running benchmark tests..."
+	$(GO) test -bench=. -benchmem ./test/benchmark/...
+	$(GO) test -bench=. -benchmem ./internal/core/algorithm/...
 
 lint: ## 运行代码检查
 	@echo "Running linter..."
@@ -123,7 +128,23 @@ docker-build: ## 构建Docker镜像
 
 docker-run: ## 运行Docker容器
 	@echo "Running Docker container..."
-	docker run -p 8080:8080 -p 9090:9090 -v $(PWD)/data:/app/data scintirete:latest
+	docker run -p 8080:8080 -p 9090:9090 -p 9100:9100 -v $(PWD)/data:/app/data scintirete:latest
+
+docker-compose-up: ## 启动docker-compose服务
+	@echo "Starting services with docker-compose..."
+	docker-compose up -d
+
+docker-compose-down: ## 停止docker-compose服务
+	@echo "Stopping docker-compose services..."
+	docker-compose down
+
+docker-compose-logs: ## 查看docker-compose日志
+	@echo "Showing docker-compose logs..."
+	docker-compose logs -f
+
+docker-compose-monitoring: ## 启动包含监控的完整服务
+	@echo "Starting services with monitoring..."
+	docker-compose --profile monitoring up -d
 
 tools: ## 安装开发工具
 	@echo "Installing development tools..."
