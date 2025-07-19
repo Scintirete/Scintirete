@@ -1,0 +1,75 @@
+# Scintirete 默认配置文件
+
+# [server] 表定义了网络服务和认证相关的配置
+[server]
+# gRPC 服务监听的主机地址
+grpc_host = "127.0.0.1"
+# gRPC 服务监听的端口
+grpc_port = 9090
+
+# HTTP/JSON 网关监听的主机地址 (通过 gRPC-Gateway 实现)
+http_host = "127.0.0.1"
+# HTTP/JSON 网关监听的端口
+http_port = 8080
+
+# 简单的密码列表授权。客户端请求中的 password 必须是列表中的一员。
+# 为了安全，建议使用环境变量或 secrets management 工具来填充。
+passwords = ["your-strong-password-here", "another-secret-key"]
+
+
+# [log] 表定义了日志行为
+[log]
+# 日志级别: "debug", "info", "warn", "error"
+level = "info"
+# 日志格式: "text" (人类可读) 或 "json" (机器可读)
+format = "json"
+# 是否启用审计日志 (记录所有写操作)
+enable_audit_log = true
+
+
+# [persistence] 表定义了数据持久化策略
+[persistence]
+# 数据目录，用于存放 RDB 快照和 AOF 日志
+data_dir = "./data"
+# RDB 快照文件名
+rdb_filename = "dump.rdb"
+# AOF (Append-Only File) 日志文件名
+aof_filename = "appendonly.aof"
+# AOF 同步策略:
+# "always": 每个写命令都立即同步到磁盘，最安全但最慢。
+# "everysec": 每秒同步一次，性能和安全的良好折中（默认）。
+# "no": 由操作系统决定何时同步，最快但最不安全。
+aof_sync_strategy = "everysec"
+
+
+# [embedding] 表定义了与外部文本嵌入服务交互的配置
+[embedding]
+# 符合 OpenAI `embeddings` 接口规范的 API base URL
+base_url = "https://api.openai.com/v1/embeddings"
+# API Token/Key。为了安全，强烈建议通过环境变量设置。
+# 这里指定了要读取的环境变量名称。
+api_key_env_var = "OPENAI_API_KEY"
+# 每分钟请求数限制 (RPM)
+rpm_limit = 3500
+# 每分钟 Token 数限制 (TPM)
+tpm_limit = 90000
+
+
+# [observability] 表定义了可观测性相关的配置
+[observability]
+# 是否启用 Prometheus 指标接口
+metrics_enabled = true
+# Prometheus 指标接口的路径
+metrics_path = "/metrics"
+# Prometheus 指标服务的监听端口（通常与主服务分开）
+metrics_port = 9100
+
+
+# [algorithm] 表定义了索引算法的默认参数
+[algorithm]
+  # HNSW 算法的默认超参数
+  [algorithm.hnsw_defaults]
+  # 在创建集合时，如果没有指定，则使用这些值
+  m = 16
+  ef_construction = 200
+  ef_search = 50 

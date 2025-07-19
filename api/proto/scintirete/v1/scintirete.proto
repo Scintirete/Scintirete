@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+package scintirete.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/scintirete/scintirete/gen/go/scintirete/v1;scintiretev1";
+
+// ===================================
+// 主服务定义
+// ===================================
+
+// ScintireteService 定义了向量数据库的所有可操作接口
+service ScintireteService {
+  // --- 数据库管理 ---
+  // 创建一个新的数据库
+  rpc CreateDatabase(CreateDatabaseRequest) returns (google.protobuf.Empty);
+  // 删除一个数据库及其所有集合
+  rpc DropDatabase(DropDatabaseRequest) returns (google.protobuf.Empty);
+  // 列出所有数据库
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse);
+
+  // --- 集合管理 ---
+  // 在指定数据库中创建一个新的集合
+  rpc CreateCollection(CreateCollectionRequest) returns (google.protobuf.Empty);
+  // 删除一个集合
+  rpc DropCollection(DropCollectionRequest) returns (google.protobuf.Empty);
+  // 获取集合的元数据信息
+  rpc GetCollectionInfo(GetCollectionInfoRequest) returns (CollectionInfo);
+  // 列出指定数据库中的所有集合
+  rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse);
+
+  // --- 向量数据操作 ---
+  // 插入预先计算好的向量（支持批量）
+  rpc InsertVectors(InsertVectorsRequest) returns (google.protobuf.Empty);
+  // 删除指定ID的向量（标记删除）
+  rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse);
+  // 根据向量进行相似度搜索
+  rpc Search(SearchRequest) returns (SearchResponse);
+
+  // --- 文本自动嵌入与操作 ---
+  // 传入文本，自动调用 embedding API 后插入（支持批量）
+  rpc EmbedAndInsert(EmbedAndInsertRequest) returns (google.protobuf.Empty);
+  // 传入文本，自动调用 embedding API 后进行搜索
+  rpc EmbedAndSearch(EmbedAndSearchRequest) returns (SearchResponse);
+}
+
+
+// ===================================
+// 枚举与核心数据结构
+// ===================================
+
+// 距离度量类型
+enum DistanceMetric {
+  DISTANCE_METRIC_UNSPECIFIED = 0; // 未指定，将导致错误
+  L2 = 1;                          // 欧氏距离
+  COSINE = 2;                      // 余弦相似度
+  INNER_PRODUCT = 3;               // 内积
+}
+
+// HNSW 算法的配置参数
+message HnswConfig {
+  int32 m = 1;                // 图中每个节点的最大连接数 (default: 16)
+  int32 ef_construction = 2;  // 构建图时的搜索范围大小 (default: 200)
+}
+
+// 向量数据点
+message Vector {
+  string id = 1;                     // 向量的唯一ID
+  repeated float elements = 2;       // 向量的浮点数表示
+  google.protobuf.Struct metadata = 3; // 附加的 JSON 元数据
+}
+
+// 带有元数据的文本，用于自动嵌入
+message TextWithMetadata {
+  string id = 1;                       // 数据的唯一ID
+  string text = 2;                     // 原始文本
+  google.protobuf.Struct metadata = 3; // 附加的 JSON 元数据
+}
+
+// 搜索结果项
+message SearchResultItem {
+  Vector vector = 1; // 匹配到的向量（包含ID和元数据）
+  float distance = 2; // 与查询向量的距离/相似度
+}
+
+// 集合的元数据信息
+message CollectionInfo {
+  string name = 1;                   // 集合名称
+  int32 dimension = 2;               // 向量维度
+  int64 vector_count = 3;            // 向量总数
+  int64 deleted_count = 4;           // 标记删除的向量数
+  int64 memory_bytes = 5;            // 预估内存占用 (in bytes)
+  DistanceMetric metric_type = 6;    // 距离度量类型
+  HnswConfig hnsw_config = 7;        // HNSW 配置
+}
+
+
+// ===================================
+// 请求/响应消息
+// ===================================
+
+// --- 通用 ---
+message AuthInfo {
+  string password = 1; // 用于简单授权的密码
+}
+
+// --- 数据库 ---
+message CreateDatabaseRequest {
+  AuthInfo auth = 1;
+  string name = 2;
+}
+
+message DropDatabaseRequest {
+  AuthInfo auth = 1;
+  string name = 2;
+}
+
+message ListDatabasesRequest {
+  AuthInfo auth = 1;
+}
+
+message ListDatabasesResponse {
+  repeated string names = 1;
+}
+
+// --- 集合 ---
+message CreateCollectionRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+  DistanceMetric metric_type = 4;
+  optional HnswConfig hnsw_config = 5; // 创建时可选的 HNSW 参数
+}
+
+message DropCollectionRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+}
+
+message GetCollectionInfoRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+}
+
+message ListCollectionsRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+}
+
+message ListCollectionsResponse {
+  repeated CollectionInfo collections = 1;
+}
+
+// --- 向量操作 ---
+message InsertVectorsRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+  repeated Vector vectors = 4;
+}
+
+message DeleteVectorsRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+  repeated string ids = 4;
+}
+
+message DeleteVectorsResponse {
+  int32 deleted_count = 1; // 成功标记删除的数量
+}
+
+message SearchRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+  repeated float query_vector = 4;
+  int32 top_k = 5;
+  optional int32 ef_search = 6; // HNSW 搜索时覆盖默认的 ef_search 参数
+  // string filter = 7; // 预留给未来的元数据过滤
+}
+
+message SearchResponse {
+  repeated SearchResultItem results = 1;
+}
+
+// --- 文本嵌入操作 ---
+message EmbedAndInsertRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+  repeated TextWithMetadata texts = 4;
+  optional string embedding_model = 5; // 指定嵌入模型，如果未指定则使用服务器默认
+}
+
+message EmbedAndSearchRequest {
+  AuthInfo auth = 1;
+  string db_name = 2;
+  string collection_name = 3;
+  string query_text = 4;
+  int32 top_k = 5;
+  optional string embedding_model = 6;
+  optional int32 ef_search = 7;
+  // string filter = 8;
+} 
