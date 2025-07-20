@@ -12,9 +12,9 @@ import (
 type DistanceMetric int32
 
 const (
-	DistanceMetricUnspecified DistanceMetric = 0
-	DistanceMetricL2          DistanceMetric = 1 // Euclidean distance
-	DistanceMetricCosine      DistanceMetric = 2 // Cosine similarity
+	DistanceMetricUnspecified  DistanceMetric = 0
+	DistanceMetricL2           DistanceMetric = 1 // Euclidean distance
+	DistanceMetricCosine       DistanceMetric = 2 // Cosine similarity
 	DistanceMetricInnerProduct DistanceMetric = 3 // Inner product
 )
 
@@ -87,17 +87,17 @@ type SearchResult struct {
 
 // SearchParams contains parameters for vector search
 type SearchParams struct {
-	TopK     int   `json:"top_k"`
-	EfSearch *int  `json:"ef_search,omitempty"` // HNSW-specific parameter
+	TopK     int  `json:"top_k"`
+	EfSearch *int `json:"ef_search,omitempty"` // HNSW-specific parameter
 }
 
 // HNSWParams contains HNSW algorithm parameters
 type HNSWParams struct {
-	M              int   `json:"m"`                // Maximum connections per node
-	EfConstruction int   `json:"ef_construction"`  // Search scope during construction
-	EfSearch       int   `json:"ef_search"`        // Search scope during query
-	MaxLayers      int   `json:"max_layers"`       // Maximum number of layers
-	Seed           int64 `json:"seed"`             // Random seed for reproducibility
+	M              int   `json:"m"`               // Maximum connections per node
+	EfConstruction int   `json:"ef_construction"` // Search scope during construction
+	EfSearch       int   `json:"ef_search"`       // Search scope during query
+	MaxLayers      int   `json:"max_layers"`      // Maximum number of layers
+	Seed           int64 `json:"seed"`            // Random seed for reproducibility
 }
 
 // DefaultHNSWParams returns default HNSW parameters
@@ -114,7 +114,7 @@ func DefaultHNSWParams() HNSWParams {
 // ToProto converts HNSWParams to protobuf message
 func (p HNSWParams) ToProto() *pb.HnswConfig {
 	return &pb.HnswConfig{
-		M:             int32(p.M),
+		M:              int32(p.M),
 		EfConstruction: int32(p.EfConstruction),
 	}
 }
@@ -168,28 +168,28 @@ func (info CollectionInfo) ToProto() *pb.CollectionInfo {
 
 // GraphStats contains statistics about the HNSW graph
 type GraphStats struct {
-	Layers       int     `json:"layers"`
-	Nodes        int     `json:"nodes"`
-	Connections  int     `json:"connections"`
-	AvgDegree    float64 `json:"avg_degree"`
-	MaxDegree    int     `json:"max_degree"`
-	MemoryUsage  int64   `json:"memory_usage"`
+	Layers      int     `json:"layers"`
+	Nodes       int     `json:"nodes"`
+	Connections int     `json:"connections"`
+	AvgDegree   float64 `json:"avg_degree"`
+	MaxDegree   int     `json:"max_degree"`
+	MemoryUsage int64   `json:"memory_usage"`
 }
 
 // IndexConfig contains configuration for creating an index
 type IndexConfig struct {
-	Type       string         `json:"type"`        // "hnsw", etc.
-	Metric     DistanceMetric `json:"metric"`
+	Type       string                 `json:"type"` // "hnsw", etc.
+	Metric     DistanceMetric         `json:"metric"`
 	Parameters map[string]interface{} `json:"parameters"`
 }
 
 // AOFCommand represents a command to be logged in AOF
 type AOFCommand struct {
-	Timestamp time.Time              `json:"timestamp"`
-	Command   string                 `json:"command"`
-	Args      map[string]interface{} `json:"args"`
-	Database  string                 `json:"database,omitempty"`
-	Collection string                `json:"collection,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Command    string                 `json:"command"`
+	Args       map[string]interface{} `json:"args"`
+	Database   string                 `json:"database,omitempty"`
+	Collection string                 `json:"collection,omitempty"`
 }
 
 // EmbeddingRequest represents a request to embedding service
@@ -200,8 +200,8 @@ type EmbeddingRequest struct {
 
 // EmbeddingResponse represents a response from embedding service
 type EmbeddingResponse struct {
-	Data []EmbeddingData `json:"data"`
-	Usage EmbeddingUsage `json:"usage"`
+	Data  []EmbeddingData `json:"data"`
+	Usage EmbeddingUsage  `json:"usage"`
 }
 
 // EmbeddingData represents a single embedding result
@@ -227,20 +227,20 @@ type DatabaseInfo struct {
 // DatabaseStats contains overall database statistics
 type DatabaseStats struct {
 	// Overall statistics
-	TotalVectors     int64   `json:"total_vectors"`
-	TotalCollections int     `json:"total_collections"`
-	TotalDatabases   int     `json:"total_databases"`
-	MemoryUsage      int64   `json:"memory_usage_bytes"`
-	
+	TotalVectors     int64 `json:"total_vectors"`
+	TotalCollections int   `json:"total_collections"`
+	TotalDatabases   int   `json:"total_databases"`
+	MemoryUsage      int64 `json:"memory_usage_bytes"`
+
 	// Request metrics
 	RequestsTotal   int64   `json:"requests_total"`
 	RequestDuration float64 `json:"request_duration_avg_ms"`
 	ErrorsTotal     int64   `json:"errors_total"`
-	
+
 	// Search metrics
 	SearchLatency    float64 `json:"search_latency_avg_ms"`
 	SearchThroughput float64 `json:"search_throughput_qps"`
-	
+
 	// Insert metrics
 	InsertLatency    float64 `json:"insert_latency_avg_ms"`
 	InsertThroughput float64 `json:"insert_throughput_ops"`
@@ -261,17 +261,17 @@ type MetricsSnapshot struct {
 	TotalCollections int       `json:"total_collections"`
 	TotalDatabases   int       `json:"total_databases"`
 	MemoryUsage      int64     `json:"memory_usage_bytes"`
-	
+
 	// Request metrics
-	RequestsTotal       int64   `json:"requests_total"`
-	RequestDuration     float64 `json:"request_duration_avg_ms"`
-	ErrorsTotal         int64   `json:"errors_total"`
-	
+	RequestsTotal   int64   `json:"requests_total"`
+	RequestDuration float64 `json:"request_duration_avg_ms"`
+	ErrorsTotal     int64   `json:"errors_total"`
+
 	// Search metrics
-	SearchLatency       float64 `json:"search_latency_avg_ms"`
-	SearchThroughput    float64 `json:"search_throughput_qps"`
-	
+	SearchLatency    float64 `json:"search_latency_avg_ms"`
+	SearchThroughput float64 `json:"search_throughput_qps"`
+
 	// Insert metrics
-	InsertLatency       float64 `json:"insert_latency_avg_ms"`
-	InsertThroughput    float64 `json:"insert_throughput_ops"`
-} 
+	InsertLatency    float64 `json:"insert_latency_avg_ms"`
+	InsertThroughput float64 `json:"insert_throughput_ops"`
+}

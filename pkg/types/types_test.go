@@ -121,7 +121,7 @@ func TestHNSWParams_ToProto(t *testing.T) {
 func TestHNSWParamsFromProto(t *testing.T) {
 	t.Run("with valid config", func(t *testing.T) {
 		pbConfig := &pb.HnswConfig{
-			M:             32,
+			M:              32,
 			EfConstruction: 400,
 		}
 
@@ -153,7 +153,7 @@ func TestHNSWParamsFromProto(t *testing.T) {
 
 	t.Run("with zero values", func(t *testing.T) {
 		pbConfig := &pb.HnswConfig{
-			M:             0,
+			M:              0,
 			EfConstruction: 0,
 		}
 
@@ -204,4 +204,4 @@ func TestCollectionInfo_ToProto(t *testing.T) {
 	if proto.MetricType != info.MetricType.ToProto() {
 		t.Errorf("CollectionInfo.ToProto().MetricType = %v, want %v", proto.MetricType, info.MetricType.ToProto())
 	}
-} 
+}

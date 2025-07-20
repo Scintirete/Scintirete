@@ -31,12 +31,12 @@ type AOFLogger struct {
 	writer       *bufio.Writer
 	filePath     string
 	syncStrategy SyncStrategy
-	
+
 	// Background sync for everysec strategy
-	syncTicker   *time.Ticker
-	stopSync     chan struct{}
-	syncWG       sync.WaitGroup
-	
+	syncTicker *time.Ticker
+	stopSync   chan struct{}
+	syncWG     sync.WaitGroup
+
 	// Statistics
 	commandCount int64
 	lastSync     time.Time
@@ -49,13 +49,13 @@ func NewAOFLogger(filePath string, syncStrategy SyncStrategy) (*AOFLogger, error
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, utils.ErrPersistenceFailedWithCause("failed to create AOF directory", err)
 	}
-	
+
 	// Open file for append
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, utils.ErrPersistenceFailedWithCause("failed to open AOF file", err)
 	}
-	
+
 	logger := &AOFLogger{
 		file:         file,
 		writer:       bufio.NewWriter(file),
@@ -64,12 +64,12 @@ func NewAOFLogger(filePath string, syncStrategy SyncStrategy) (*AOFLogger, error
 		stopSync:     make(chan struct{}),
 		lastSync:     time.Now(),
 	}
-	
+
 	// Start background sync if needed
 	if syncStrategy == SyncEverySec {
 		logger.startBackgroundSync()
 	}
-	
+
 	return logger, nil
 }
 
@@ -77,18 +77,18 @@ func NewAOFLogger(filePath string, syncStrategy SyncStrategy) (*AOFLogger, error
 func (a *AOFLogger) WriteCommand(ctx context.Context, command types.AOFCommand) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	// Set timestamp if not provided
 	if command.Timestamp.IsZero() {
 		command.Timestamp = time.Now()
 	}
-	
+
 	// Serialize command to JSON
 	data, err := json.Marshal(command)
 	if err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to serialize AOF command", err)
 	}
-	
+
 	// Write to buffer with newline
 	if _, err := a.writer.Write(data); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to write AOF command", err)
@@ -96,9 +96,9 @@ func (a *AOFLogger) WriteCommand(ctx context.Context, command types.AOFCommand) 
 	if err := a.writer.WriteByte('\n'); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to write AOF newline", err)
 	}
-	
+
 	a.commandCount++
-	
+
 	// Sync based on strategy
 	switch a.syncStrategy {
 	case SyncAlways:
@@ -110,7 +110,7 @@ func (a *AOFLogger) WriteCommand(ctx context.Context, command types.AOFCommand) 
 	case SyncNo:
 		// OS will sync when it wants
 	}
-	
+
 	return nil
 }
 
@@ -122,7 +122,7 @@ func (a *AOFLogger) Replay(ctx context.Context, handler func(types.AOFCommand) e
 		a.syncToFile() // Ensure any buffered data is written
 	}
 	a.mu.Unlock()
-	
+
 	// Open file for reading
 	file, err := os.Open(a.filePath)
 	if err != nil {
@@ -132,30 +132,30 @@ func (a *AOFLogger) Replay(ctx context.Context, handler func(types.AOFCommand) e
 		return utils.ErrRecoveryFailed("failed to open AOF file for replay: " + err.Error())
 	}
 	defer file.Close()
-	
+
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
-	
+
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
-		
+
 		// Skip empty lines
 		if len(line) == 0 {
 			continue
 		}
-		
+
 		// Parse command
 		var command types.AOFCommand
 		if err := json.Unmarshal([]byte(line), &command); err != nil {
 			return utils.ErrCorruptedData(fmt.Sprintf("invalid AOF command at line %d: %v", lineNum, err))
 		}
-		
+
 		// Execute command
 		if err := handler(command); err != nil {
 			return utils.ErrRecoveryFailed(fmt.Sprintf("failed to replay AOF command at line %d: %v", lineNum, err))
 		}
-		
+
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -163,11 +163,11 @@ func (a *AOFLogger) Replay(ctx context.Context, handler func(types.AOFCommand) e
 		default:
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return utils.ErrCorruptedData("failed to read AOF file: " + err.Error())
 	}
-	
+
 	return nil
 }
 
@@ -175,7 +175,7 @@ func (a *AOFLogger) Replay(ctx context.Context, handler func(types.AOFCommand) e
 func (a *AOFLogger) Rewrite(ctx context.Context, snapshotCommands []types.AOFCommand) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	// Create temporary file
 	tempPath := a.filePath + ".tmp"
 	tempFile, err := os.Create(tempPath)
@@ -186,23 +186,23 @@ func (a *AOFLogger) Rewrite(ctx context.Context, snapshotCommands []types.AOFCom
 		tempFile.Close()
 		os.Remove(tempPath) // Clean up on error
 	}()
-	
+
 	writer := bufio.NewWriter(tempFile)
-	
+
 	// Write optimized commands
 	for _, command := range snapshotCommands {
 		data, err := json.Marshal(command)
 		if err != nil {
 			return utils.ErrPersistenceFailedWithCause("failed to serialize rewrite command", err)
 		}
-		
+
 		if _, err := writer.Write(data); err != nil {
 			return utils.ErrPersistenceFailedWithCause("failed to write rewrite command", err)
 		}
 		if err := writer.WriteByte('\n'); err != nil {
 			return utils.ErrPersistenceFailedWithCause("failed to write rewrite newline", err)
 		}
-		
+
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -210,7 +210,7 @@ func (a *AOFLogger) Rewrite(ctx context.Context, snapshotCommands []types.AOFCom
 		default:
 		}
 	}
-	
+
 	// Flush and sync
 	if err := writer.Flush(); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to flush rewrite buffer", err)
@@ -221,7 +221,7 @@ func (a *AOFLogger) Rewrite(ctx context.Context, snapshotCommands []types.AOFCom
 	if err := tempFile.Close(); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to close rewrite file", err)
 	}
-	
+
 	// Close current file
 	if err := a.syncToFile(); err != nil {
 		return err
@@ -229,12 +229,12 @@ func (a *AOFLogger) Rewrite(ctx context.Context, snapshotCommands []types.AOFCom
 	if err := a.file.Close(); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to close current AOF file", err)
 	}
-	
+
 	// Replace old file with new one
 	if err := os.Rename(tempPath, a.filePath); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to replace AOF file", err)
 	}
-	
+
 	// Reopen file for writing
 	a.file, err = os.OpenFile(a.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -242,7 +242,7 @@ func (a *AOFLogger) Rewrite(ctx context.Context, snapshotCommands []types.AOFCom
 	}
 	a.writer = bufio.NewWriter(a.file)
 	a.commandCount = int64(len(snapshotCommands))
-	
+
 	return nil
 }
 
@@ -250,22 +250,22 @@ func (a *AOFLogger) Rewrite(ctx context.Context, snapshotCommands []types.AOFCom
 func (a *AOFLogger) Truncate() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	// Close current file
 	if err := a.file.Close(); err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to close AOF file for truncation", err)
 	}
-	
+
 	// Recreate empty file
 	file, err := os.Create(a.filePath)
 	if err != nil {
 		return utils.ErrPersistenceFailedWithCause("failed to recreate AOF file", err)
 	}
-	
+
 	a.file = file
 	a.writer = bufio.NewWriter(file)
 	a.commandCount = 0
-	
+
 	return nil
 }
 
@@ -276,15 +276,15 @@ func (a *AOFLogger) Close() error {
 		close(a.stopSync)
 		a.syncWG.Wait()
 	}
-	
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	// Final sync and close
 	if err := a.syncToFile(); err != nil {
 		return err
 	}
-	
+
 	return a.file.Close()
 }
 
@@ -292,13 +292,13 @@ func (a *AOFLogger) Close() error {
 func (a *AOFLogger) GetStats() AOFStats {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	fileInfo, _ := a.file.Stat()
 	fileSize := int64(0)
 	if fileInfo != nil {
 		fileSize = fileInfo.Size()
 	}
-	
+
 	return AOFStats{
 		CommandCount: a.commandCount,
 		FileSize:     fileSize,
@@ -333,11 +333,11 @@ func (a *AOFLogger) syncToFile() error {
 func (a *AOFLogger) startBackgroundSync() {
 	a.syncTicker = time.NewTicker(time.Second)
 	a.syncWG.Add(1)
-	
+
 	go func() {
 		defer a.syncWG.Done()
 		defer a.syncTicker.Stop()
-		
+
 		for {
 			select {
 			case <-a.syncTicker.C:
@@ -386,8 +386,8 @@ func (cb *CommandBuilder) DropDatabase(dbName string) types.AOFCommand {
 // CreateCollection builds a command for collection creation
 func (cb *CommandBuilder) CreateCollection(dbName, collName string, config types.CollectionConfig) types.AOFCommand {
 	return types.AOFCommand{
-		Timestamp:  time.Now(),
-		Command:    "CREATE_COLLECTION",
+		Timestamp: time.Now(),
+		Command:   "CREATE_COLLECTION",
 		Args: map[string]interface{}{
 			"name":   collName,
 			"config": config,
@@ -434,4 +434,4 @@ func (cb *CommandBuilder) DeleteVectors(dbName, collName string, ids []string) t
 		Database:   dbName,
 		Collection: collName,
 	}
-} 
+}

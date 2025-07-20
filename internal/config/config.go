@@ -115,42 +115,42 @@ func DefaultConfig() *Config {
 // LoadConfig loads configuration from a TOML file.
 func LoadConfig(filePath string) (*Config, error) {
 	config := DefaultConfig()
-	
+
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("config file not found: %s", filePath)
 	}
-	
+
 	// Decode TOML file
 	if _, err := toml.DecodeFile(filePath, config); err != nil {
 		return nil, fmt.Errorf("failed to decode config file: %w", err)
 	}
-	
+
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	// Resolve relative paths
 	if err := config.resolvePaths(filePath); err != nil {
 		return nil, fmt.Errorf("failed to resolve paths: %w", err)
 	}
-	
+
 	return config, nil
 }
 
 // LoadConfigFromString loads configuration from a TOML string.
 func LoadConfigFromString(tomlData string) (*Config, error) {
 	config := DefaultConfig()
-	
+
 	if _, err := toml.Decode(tomlData, config); err != nil {
 		return nil, fmt.Errorf("failed to decode config: %w", err)
 	}
-	
+
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	return config, nil
 }
 
@@ -166,7 +166,7 @@ func (c *Config) Validate() error {
 	if len(c.Server.Passwords) == 0 {
 		return fmt.Errorf("at least one password must be configured")
 	}
-	
+
 	// Validate log config
 	validLogLevels := map[string]bool{
 		"debug": true, "info": true, "warn": true, "error": true,
@@ -174,14 +174,14 @@ func (c *Config) Validate() error {
 	if !validLogLevels[c.Log.Level] {
 		return fmt.Errorf("invalid log level: %s", c.Log.Level)
 	}
-	
+
 	validLogFormats := map[string]bool{
 		"text": true, "json": true,
 	}
 	if !validLogFormats[c.Log.Format] {
 		return fmt.Errorf("invalid log format: %s", c.Log.Format)
 	}
-	
+
 	// Validate persistence config
 	if c.Persistence.DataDir == "" {
 		return fmt.Errorf("data directory cannot be empty")
@@ -192,14 +192,14 @@ func (c *Config) Validate() error {
 	if c.Persistence.AOFFilename == "" {
 		return fmt.Errorf("AOF filename cannot be empty")
 	}
-	
+
 	validAOFStrategies := map[string]bool{
 		"always": true, "everysec": true, "no": true,
 	}
 	if !validAOFStrategies[c.Persistence.AOFSyncStrategy] {
 		return fmt.Errorf("invalid AOF sync strategy: %s", c.Persistence.AOFSyncStrategy)
 	}
-	
+
 	// Validate embedding config
 	if c.Embedding.BaseURL == "" {
 		return fmt.Errorf("embedding base URL cannot be empty")
@@ -210,7 +210,7 @@ func (c *Config) Validate() error {
 	if c.Embedding.TPMLimit <= 0 {
 		return fmt.Errorf("TPM limit must be positive: %d", c.Embedding.TPMLimit)
 	}
-	
+
 	// Validate observability config
 	if c.Observability.MetricsEnabled {
 		if c.Observability.MetricsPort <= 0 || c.Observability.MetricsPort > 65535 {
@@ -220,7 +220,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("metrics path cannot be empty when metrics are enabled")
 		}
 	}
-	
+
 	// Validate algorithm config
 	if c.Algorithm.HNSWDefaults.M <= 0 {
 		return fmt.Errorf("HNSW M parameter must be positive: %d", c.Algorithm.HNSWDefaults.M)
@@ -231,19 +231,19 @@ func (c *Config) Validate() error {
 	if c.Algorithm.HNSWDefaults.EfSearch <= 0 {
 		return fmt.Errorf("HNSW ef_search must be positive: %d", c.Algorithm.HNSWDefaults.EfSearch)
 	}
-	
+
 	return nil
 }
 
 // resolvePaths converts relative paths to absolute paths based on config file location.
 func (c *Config) resolvePaths(configFilePath string) error {
 	configDir := filepath.Dir(configFilePath)
-	
+
 	// Resolve data directory path
 	if !filepath.IsAbs(c.Persistence.DataDir) {
 		c.Persistence.DataDir = filepath.Join(configDir, c.Persistence.DataDir)
 	}
-	
+
 	return nil
 }
 
@@ -287,30 +287,30 @@ func (c *Config) SaveConfig(filePath string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	// Create or truncate the file
 	file, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
 	defer file.Close()
-	
+
 	// Encode to TOML
 	encoder := toml.NewEncoder(file)
 	if err := encoder.Encode(c); err != nil {
 		return fmt.Errorf("failed to encode config to TOML: %w", err)
 	}
-	
+
 	return nil
 }
 
 // Clone creates a deep copy of the configuration.
 func (c *Config) Clone() *Config {
 	clone := *c
-	
+
 	// Deep copy slices
 	clone.Server.Passwords = make([]string, len(c.Server.Passwords))
 	copy(clone.Server.Passwords, c.Server.Passwords)
-	
+
 	return &clone
-} 
+}

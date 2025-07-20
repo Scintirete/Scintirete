@@ -264,9 +264,9 @@ func TestHNSW_DifferentMetrics(t *testing.T) {
 				t.Fatalf("Build failed for metric %v: %v", metric, err)
 			}
 
-					query := []float32{1.0, 0.0}
-		searchParams := types.SearchParams{TopK: 1}
-		results, err := index.Search(context.Background(), query, searchParams)
+			query := []float32{1.0, 0.0}
+			searchParams := types.SearchParams{TopK: 1}
+			results, err := index.Search(context.Background(), query, searchParams)
 			if err != nil {
 				t.Errorf("Search failed for metric %v: %v", metric, err)
 			}
@@ -482,4 +482,4 @@ func generateRandomVector(dim int) []float32 {
 		vector[i] = float32(i) / float32(dim) // Simple deterministic pattern
 	}
 	return vector
-} 
+}

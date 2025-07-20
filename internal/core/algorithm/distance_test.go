@@ -345,7 +345,7 @@ func TestNormalizeVector(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result := NormalizeVector(test.input)
-			
+
 			if len(result) != len(test.expected) {
 				t.Fatalf("NormalizeVector returned length %d, want %d", len(result), len(test.expected))
 			}
@@ -494,4 +494,4 @@ func BenchmarkInnerProductDistance(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		calc.Distance(a, vec)
 	}
-} 
+}

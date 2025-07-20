@@ -217,4 +217,4 @@ func TestGetErrorCode(t *testing.T) {
 	if code := GetErrorCode(nil); code != ErrorCodeInternal {
 		t.Errorf("GetErrorCode(nil) = %v, want %v", code, ErrorCodeInternal)
 	}
-} 
+}

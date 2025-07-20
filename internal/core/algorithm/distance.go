@@ -189,4 +189,4 @@ func DotProduct(a, b []float32) float32 {
 		product += a[i] * b[i]
 	}
 	return product
-} 
+}

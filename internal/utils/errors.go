@@ -22,15 +22,15 @@ const (
 	ErrorCodeRateLimited  ErrorCode = 2002
 
 	// Business errors (3000-3999)
-	ErrorCodeDatabaseNotFound      ErrorCode = 3000
-	ErrorCodeDatabaseAlreadyExists ErrorCode = 3001
-	ErrorCodeCollectionNotFound    ErrorCode = 3002
+	ErrorCodeDatabaseNotFound        ErrorCode = 3000
+	ErrorCodeDatabaseAlreadyExists   ErrorCode = 3001
+	ErrorCodeCollectionNotFound      ErrorCode = 3002
 	ErrorCodeCollectionAlreadyExists ErrorCode = 3003
-	ErrorCodeVectorNotFound        ErrorCode = 3004
-	ErrorCodeDimensionMismatch     ErrorCode = 3005
-	ErrorCodeInvalidVectorID       ErrorCode = 3006
-	ErrorCodeInvalidParameters     ErrorCode = 3007
-	ErrorCodeEmptyCollection       ErrorCode = 3008
+	ErrorCodeVectorNotFound          ErrorCode = 3004
+	ErrorCodeDimensionMismatch       ErrorCode = 3005
+	ErrorCodeInvalidVectorID         ErrorCode = 3006
+	ErrorCodeInvalidParameters       ErrorCode = 3007
+	ErrorCodeEmptyCollection         ErrorCode = 3008
 
 	// Persistence errors (4000-4999)
 	ErrorCodePersistenceFailed ErrorCode = 4000
@@ -45,8 +45,8 @@ const (
 	ErrorCodeDeleteFailed     ErrorCode = 5003
 
 	// External service errors (6000-6999)
-	ErrorCodeEmbeddingApiFailed ErrorCode = 6000
-	ErrorCodeEmbeddingTimeout   ErrorCode = 6001
+	ErrorCodeEmbeddingApiFailed     ErrorCode = 6000
+	ErrorCodeEmbeddingTimeout       ErrorCode = 6001
 	ErrorCodeEmbeddingQuotaExceeded ErrorCode = 6002
 )
 
@@ -126,9 +126,9 @@ func (ec ErrorCode) String() string {
 
 // ScintireteError represents a structured error in the Scintirete system
 type ScintireteError struct {
-	Code    ErrorCode `json:"code"`
-	Message string    `json:"message"`
-	Cause   error     `json:"cause,omitempty"`
+	Code    ErrorCode              `json:"code"`
+	Message string                 `json:"message"`
+	Cause   error                  `json:"cause,omitempty"`
 	Context map[string]interface{} `json:"context,omitempty"`
 }
 
@@ -137,11 +137,11 @@ func (e *ScintireteError) Error() string {
 	var parts []string
 	parts = append(parts, fmt.Sprintf("[%s]", e.Code.String()))
 	parts = append(parts, e.Message)
-	
+
 	if e.Cause != nil {
 		parts = append(parts, fmt.Sprintf("caused by: %v", e.Cause))
 	}
-	
+
 	return strings.Join(parts, " ")
 }
 
@@ -218,12 +218,12 @@ func ErrDatabaseAlreadyExists(dbName string) *ScintireteError {
 }
 
 func ErrCollectionNotFound(dbName, collName string) *ScintireteError {
-	return NewError(ErrorCodeCollectionNotFound, 
+	return NewError(ErrorCodeCollectionNotFound,
 		fmt.Sprintf("collection '%s' not found in database '%s'", collName, dbName))
 }
 
 func ErrCollectionAlreadyExists(dbName, collName string) *ScintireteError {
-	return NewError(ErrorCodeCollectionAlreadyExists, 
+	return NewError(ErrorCodeCollectionAlreadyExists,
 		fmt.Sprintf("collection '%s' already exists in database '%s'", collName, dbName))
 }
 
@@ -232,7 +232,7 @@ func ErrVectorNotFound(id string) *ScintireteError {
 }
 
 func ErrDimensionMismatch(expected, actual int) *ScintireteError {
-	return NewError(ErrorCodeDimensionMismatch, 
+	return NewError(ErrorCodeDimensionMismatch,
 		fmt.Sprintf("dimension mismatch: expected %d, got %d", expected, actual))
 }
 
@@ -245,7 +245,7 @@ func ErrInvalidParameters(message string) *ScintireteError {
 }
 
 func ErrEmptyCollection(dbName, collName string) *ScintireteError {
-	return NewError(ErrorCodeEmptyCollection, 
+	return NewError(ErrorCodeEmptyCollection,
 		fmt.Sprintf("collection '%s' in database '%s' is empty", collName, dbName))
 }
 
@@ -313,8 +313,6 @@ func ErrCollectionEmpty(message string) *ScintireteError {
 	return NewError(ErrorCodeEmptyCollection, message)
 }
 
-
-
 // IsScintireteError checks if an error is a ScintireteError
 func IsScintireteError(err error) bool {
 	_, ok := err.(*ScintireteError)
@@ -344,4 +342,4 @@ func ErrCollectionExists(name string) *ScintireteError {
 
 func ErrCollectionCreationFailed(message string) *ScintireteError {
 	return NewError(ErrorCodeInternal, message)
-} 
+}
