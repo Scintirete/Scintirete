@@ -1,5 +1,5 @@
-// Package server provides vector operations for the gRPC server.
-package server
+// Package grpc provides vector operations for the gRPC server.
+package grpc
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 )
 
 // InsertVectors adds vectors to a collection
-func (s *GRPCServer) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest) (*emptypb.Empty, error) {
+func (s *Server) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest) (*emptypb.Empty, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (s *GRPCServer) InsertVectors(ctx context.Context, req *pb.InsertVectorsReq
 }
 
 // DeleteVectors marks vectors as deleted by their IDs
-func (s *GRPCServer) DeleteVectors(ctx context.Context, req *pb.DeleteVectorsRequest) (*pb.DeleteVectorsResponse, error) {
+func (s *Server) DeleteVectors(ctx context.Context, req *pb.DeleteVectorsRequest) (*pb.DeleteVectorsResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (s *GRPCServer) DeleteVectors(ctx context.Context, req *pb.DeleteVectorsReq
 }
 
 // Search performs vector similarity search
-func (s *GRPCServer) Search(ctx context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
+func (s *Server) Search(ctx context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -226,7 +226,7 @@ func (s *GRPCServer) Search(ctx context.Context, req *pb.SearchRequest) (*pb.Sea
 }
 
 // EmbedAndInsert processes text through embedding API and inserts the resulting vectors
-func (s *GRPCServer) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertRequest) (*emptypb.Empty, error) {
+func (s *Server) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertRequest) (*emptypb.Empty, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -313,7 +313,7 @@ func (s *GRPCServer) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertR
 }
 
 // EmbedAndSearch processes query text through embedding API and performs search
-func (s *GRPCServer) EmbedAndSearch(ctx context.Context, req *pb.EmbedAndSearchRequest) (*pb.SearchResponse, error) {
+func (s *Server) EmbedAndSearch(ctx context.Context, req *pb.EmbedAndSearchRequest) (*pb.SearchResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -394,40 +394,4 @@ func (s *GRPCServer) EmbedAndSearch(ctx context.Context, req *pb.EmbedAndSearchR
 	return &pb.SearchResponse{
 		Results: pbResults,
 	}, nil
-}
-
-// Helper functions
-
-// isNotFoundError checks if an error is a "not found" type error
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	// Check if it's a ScintireteError with appropriate code
-	if scintireteErr, ok := err.(*utils.ScintireteError); ok {
-		switch scintireteErr.Code {
-		case utils.ErrorCodeDatabaseNotFound,
-			utils.ErrorCodeCollectionNotFound,
-			utils.ErrorCodeVectorNotFound:
-			return true
-		}
-	}
-
-	return false
-}
-
-// mapToStruct converts a map[string]interface{} to *structpb.Struct
-func mapToStruct(m map[string]interface{}) *structpb.Struct {
-	if m == nil {
-		return nil
-	}
-
-	s, err := structpb.NewStruct(m)
-	if err != nil {
-		// Return empty struct if conversion fails
-		return &structpb.Struct{}
-	}
-
-	return s
 }

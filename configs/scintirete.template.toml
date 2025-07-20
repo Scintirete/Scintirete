@@ -68,7 +68,7 @@ metrics_port = 9100
 [algorithm]
   # HNSW 算法的默认超参数
   [algorithm.hnsw_defaults]
-  # 在创建集合时，如果没有指定，则使用这些值
+  # 在创建集合时，如果没有指定，则使用这些值，调整参数可平衡召回率、查询速度、资源消耗（参考 docs/1_HNSW_超参数调整.md）
   m = 16
   ef_construction = 200
   ef_search = 50 
