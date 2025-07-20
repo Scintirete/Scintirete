@@ -290,7 +290,7 @@ func (s *MetricsServer) RegisterSystemMetrics() {
 			{
 				Labels: []Label{
 					{Name: "version", Value: "dev"},
-					{Name: "go_version", Value: "1.21"},
+					{Name: "go_version", Value: "1.24"},
 				},
 				Value: 1,
 			},
