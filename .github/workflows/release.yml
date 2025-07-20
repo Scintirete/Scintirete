@@ -221,10 +221,10 @@ jobs:
         
         ```bash
         # 拉取最新版本
-        docker pull ghcr.io/${{ github.repository_owner }}/scintirete:${{ github.ref_name }}
+        docker pull ghcr.io/${{ github.repository_owner | lower }}/scintirete:${{ github.ref_name }}
         
         # 拉取 latest 版本（如果是默认分支）
-        docker pull ghcr.io/${{ github.repository_owner }}/scintirete:latest
+        docker pull ghcr.io/${{ github.repository_owner | lower }}/scintirete:latest
         
         # 运行容器
         docker run -d \
@@ -232,7 +232,7 @@ jobs:
           -p 8080:8080 \
           -p 9090:9090 \
           -v scintirete-data:/app/data \
-          ghcr.io/${{ github.repository_owner }}/scintirete:${{ github.ref_name }}
+          ghcr.io/${{ github.repository_owner | lower }}/scintirete:${{ github.ref_name }}
         ```
         
         ### 🚀 快速开始
@@ -249,7 +249,7 @@ jobs:
         docker-compose up -d
         
         # 或直接运行
-        docker run -p 8080:8080 -p 9090:9090 ghcr.io/${{ github.repository_owner }}/scintirete:${{ github.ref_name }}
+        docker run -p 8080:8080 -p 9090:9090 ghcr.io/${{ github.repository_owner | lower }}/scintirete:${{ github.ref_name }}
         ```
         EOF
         

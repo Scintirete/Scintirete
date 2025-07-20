@@ -50,9 +50,9 @@ type Config struct {
 
 // NewClient creates a new embedding client
 func NewClient(config Config) (*Client, error) {
-	apiKey := os.Getenv(config.APIKeyEnvVar)
-	if apiKey == "" {
-		return nil, fmt.Errorf("API key not found in environment variable: %s", config.APIKeyEnvVar)
+	var apiKey string
+	if config.APIKeyEnvVar != "" {
+		apiKey = os.Getenv(config.APIKeyEnvVar)
 	}
 
 	if config.Timeout == 0 {
@@ -106,6 +106,11 @@ func (rc *rateCounter) canProceed(tokens int) bool {
 func (c *Client) GetEmbeddings(ctx context.Context, texts []string, model string) (*types.EmbeddingResponse, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("no texts provided")
+	}
+
+	// Check if API key is available for embedding operations
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("embedding functionality requires API key to be configured")
 	}
 
 	// Estimate token count (rough approximation: 1 token ≈ 4 characters)
