@@ -115,7 +115,7 @@ jobs:
         fi
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: scintirete-${{ matrix.goos }}-${{ matrix.goarch }}
         path: dist/scintirete-${{ matrix.goos }}-${{ matrix.goarch }}.*
@@ -128,64 +128,58 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
+      with:
+        path: ./
 
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-        body: |
-          ## Scintirete ${{ github.ref_name }}
-          
-          **Scintirete** - 基于HNSW算法的轻量级向量数据库
-          
-          ### 📦 二进制包下载
-          
-          选择适合您操作系统和架构的版本：
-          
-          #### Linux
-          - `scintirete-linux-amd64.tar.gz` - Linux x86_64
-          - `scintirete-linux-arm64.tar.gz` - Linux ARM64
-          - `scintirete-linux-arm.tar.gz` - Linux ARM v7
-          
-          #### Windows
-          - `scintirete-windows-amd64.zip` - Windows x86_64
-          - `scintirete-windows-arm64.zip` - Windows ARM64
-          
-          #### macOS
-          - `scintirete-darwin-amd64.tar.gz` - macOS Intel
-          - `scintirete-darwin-arm64.tar.gz` - macOS Apple Silicon
-          
-          #### 其他系统
-          - `scintirete-freebsd-amd64.tar.gz` - FreeBSD x86_64
-          - `scintirete-openbsd-amd64.tar.gz` - OpenBSD x86_64
-          
-          ### 🚀 快速开始
-          
-          1. 下载对应系统的二进制包
-          2. 解压到目标目录
-          3. 运行 `./scintirete-server --help` 查看使用说明
-          
-    - name: Upload Release Assets
       run: |
-        for dir in scintirete-*; do
-          if [ -d "$dir" ]; then
-            for file in "$dir"/*; do
-              if [ -f "$file" ]; then
-                echo "Uploading $file"
-                curl \
-                  -X POST \
-                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                  -H "Content-Type: application/octet-stream" \
-                  --data-binary @"$file" \
-                  "${{ steps.create_release.outputs.upload_url }}?name=$(basename "$file")"
-              fi
-            done
-          fi
-        done 
+        # Create release notes
+        cat > release_notes.md << 'EOF'
+        ## Scintirete ${{ github.ref_name }}
+        
+        **Scintirete** - 基于HNSW算法的轻量级向量数据库
+        
+        ### 📦 二进制包下载
+        
+        选择适合您操作系统和架构的版本：
+        
+        #### Linux
+        - `scintirete-linux-amd64.tar.gz` - Linux x86_64
+        - `scintirete-linux-arm64.tar.gz` - Linux ARM64
+        - `scintirete-linux-arm.tar.gz` - Linux ARM v7
+        
+        #### Windows
+        - `scintirete-windows-amd64.zip` - Windows x86_64
+        - `scintirete-windows-arm64.zip` - Windows ARM64
+        
+        #### macOS
+        - `scintirete-darwin-amd64.tar.gz` - macOS Intel
+        - `scintirete-darwin-arm64.tar.gz` - macOS Apple Silicon
+        
+        #### 其他系统
+        - `scintirete-freebsd-amd64.tar.gz` - FreeBSD x86_64
+        - `scintirete-openbsd-amd64.tar.gz` - OpenBSD x86_64
+        
+        ### 🚀 快速开始
+        
+        1. 下载对应系统的二进制包
+        2. 解压到目标目录
+        3. 运行 `./scintirete-server --help` 查看使用说明
+        EOF
+        
+        # Check if it's a pre-release (contains dev, alpha, beta, rc)
+        if [[ "${{ github.ref_name }}" =~ (dev|alpha|beta|rc) ]]; then
+          PRERELEASE_FLAG="--prerelease"
+        else
+          PRERELEASE_FLAG=""
+        fi
+        
+        # Create release using gh CLI
+        gh release create "${{ github.ref_name }}" \
+          --title "Release ${{ github.ref_name }}" \
+          --notes-file release_notes.md \
+          $PRERELEASE_FLAG \
+          ./scintirete-*/* 
