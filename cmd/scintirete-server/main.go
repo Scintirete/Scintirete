@@ -22,20 +22,26 @@ import (
 )
 
 var (
-	configFile = flag.String("config", "scintirete.toml", "Path to configuration file")
-	grpcHost   = flag.String("grpc.host", "", "Override gRPC host from config")
-	grpcPort   = flag.Int("grpc.port", 0, "Override gRPC port from config")
-	httpPort   = flag.Int("http.port", 0, "Override HTTP port from config")
-	dataDir    = flag.String("data-dir", "", "Override data directory from config")
-	logLevel   = flag.String("log.level", "", "Override log level from config")
-	version    = flag.Bool("version", false, "Show version information")
+	// Build-time variables
+	version = "dev"
+	commit  = "unknown"
+
+	// Command line flags
+	configFile  = flag.String("config", "scintirete.toml", "Path to configuration file")
+	grpcHost    = flag.String("grpc.host", "", "Override gRPC host from config")
+	grpcPort    = flag.Int("grpc.port", 0, "Override gRPC port from config")
+	httpPort    = flag.Int("http.port", 0, "Override HTTP port from config")
+	dataDir     = flag.String("data-dir", "", "Override data directory from config")
+	logLevel    = flag.String("log.level", "", "Override log level from config")
+	showVersion = flag.Bool("version", false, "Show version information")
 )
 
 func main() {
 	flag.Parse()
 
-	if *version {
-		fmt.Println("Scintirete Server v1.0.0")
+	if *showVersion {
+		fmt.Printf("Scintirete Server %s\n", version)
+		fmt.Printf("Commit: %s\n", commit)
 		fmt.Println("A lightweight vector database with HNSW indexing")
 		return
 	}

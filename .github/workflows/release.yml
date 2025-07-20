@@ -7,6 +7,11 @@ on:
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   release:
@@ -59,7 +64,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.24'
+        go-version: '1.21'
 
     - name: Install Protocol Buffers compiler
       run: |
@@ -87,15 +92,19 @@ jobs:
         # Create output directory
         mkdir -p dist
         
+        # Extract version from tag (remove 'v' prefix)
+        VERSION=${GITHUB_REF_NAME#v}
+        COMMIT=${GITHUB_SHA}
+        
         # Build server binary
         CGO_ENABLED=0 go build \
-          -ldflags="-w -s -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA}" \
+          -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
           -o dist/scintirete-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
           ./cmd/scintirete-server
         
         # Build CLI binary
         CGO_ENABLED=0 go build \
-          -ldflags="-w -s -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA}" \
+          -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
           -o dist/scintirete-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
           ./cmd/scintirete-cli
 
@@ -120,8 +129,51 @@ jobs:
         name: scintirete-${{ matrix.goos }}-${{ matrix.goarch }}
         path: dist/scintirete-${{ matrix.goos }}-${{ matrix.goarch }}.*
 
+  # Docker 镜像构建和推送
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=tag
+          type=ref,event=branch
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          VERSION=${{ github.ref_name }}
+          COMMIT=${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
   create-release:
-    needs: release
+    needs: [release, docker]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -163,11 +215,42 @@ jobs:
         - `scintirete-freebsd-amd64.tar.gz` - FreeBSD x86_64
         - `scintirete-openbsd-amd64.tar.gz` - OpenBSD x86_64
         
+        ### 🐳 Docker 镜像
+        
+        Docker 镜像已自动推送到 GitHub Container Registry：
+        
+        ```bash
+        # 拉取最新版本
+        docker pull ghcr.io/${{ github.repository_owner }}/scintirete:${{ github.ref_name }}
+        
+        # 拉取 latest 版本（如果是默认分支）
+        docker pull ghcr.io/${{ github.repository_owner }}/scintirete:latest
+        
+        # 运行容器
+        docker run -d \
+          --name scintirete \
+          -p 8080:8080 \
+          -p 9090:9090 \
+          -v scintirete-data:/app/data \
+          ghcr.io/${{ github.repository_owner }}/scintirete:${{ github.ref_name }}
+        ```
+        
         ### 🚀 快速开始
         
+        #### 使用二进制文件
         1. 下载对应系统的二进制包
         2. 解压到目标目录
         3. 运行 `./scintirete-server --help` 查看使用说明
+        
+        #### 使用 Docker
+        ```bash
+        # 使用 docker-compose
+        wget https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.yml
+        docker-compose up -d
+        
+        # 或直接运行
+        docker run -p 8080:8080 -p 9090:9090 ghcr.io/${{ github.repository_owner }}/scintirete:${{ github.ref_name }}
+        ```
         EOF
         
         # Check if it's a pre-release (contains dev, alpha, beta, rc)

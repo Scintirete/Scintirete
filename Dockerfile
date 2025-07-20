@@ -1,6 +1,10 @@
 # Multi-stage Docker build for Scintirete
 FROM golang:1.21-alpine AS builder
 
+# Build arguments
+ARG VERSION=dev
+ARG COMMIT=unknown
+
 # Install build dependencies
 RUN apk add --no-cache \
     git \
@@ -31,11 +35,11 @@ RUN make proto-gen
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.commit=${COMMIT:-unknown}" \
+    -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o scintirete-server ./cmd/scintirete-server
 
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.commit=${COMMIT:-unknown}" \
+    -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o scintirete-cli ./cmd/scintirete-cli
 
 # Production stage
