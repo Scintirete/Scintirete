@@ -361,3 +361,186 @@ func TestAOFRecoveryRDBIntegration(t *testing.T) {
 		t.Errorf("Expected at least 1 recovered command, got %d", stats.RecoveredCommands)
 	}
 }
+
+// TestRDBSnapshotWithAOFTruncation tests the complete workflow:
+// 1. Create data and log to AOF
+// 2. Save RDB snapshot (should truncate AOF)
+// 3. Add more data to AOF after snapshot
+// 4. Recover and verify all data is present
+func TestRDBSnapshotWithAOFTruncation(t *testing.T) {
+	tempDir := t.TempDir()
+
+	testLogger, err := logger.NewFromConfigString("debug", "text")
+	if err != nil {
+		t.Fatalf("Failed to create test logger: %v", err)
+	}
+
+	config := Config{
+		DataDir:         tempDir,
+		RDBFilename:     "test.rdb",
+		AOFFilename:     "test.aof",
+		AOFSyncStrategy: "always",
+		Logger:          testLogger,
+	}
+
+	// Step 1: Create engine and persistence manager
+	engine1 := database.NewEngine()
+	manager1, err := NewManagerWithEngine(config, engine1)
+	if err != nil {
+		t.Fatalf("Failed to create persistence manager: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Step 2: Create initial data and log to AOF
+	err = engine1.CreateDatabase(ctx, "test_db")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+
+	err = manager1.LogCreateDatabase(ctx, "test_db")
+	if err != nil {
+		t.Fatalf("Failed to log create database: %v", err)
+	}
+
+	testCollConfig := types.CollectionConfig{
+		Name:       "test_coll",
+		Metric:     types.DistanceMetricL2,
+		HNSWParams: types.HNSWParams{M: 16, EfConstruction: 200, EfSearch: 50},
+	}
+
+	// Create collection in engine
+	db1, err := engine1.GetDatabase(ctx, "test_db")
+	if err != nil {
+		t.Fatalf("Failed to get database: %v", err)
+	}
+
+	err = db1.CreateCollection(ctx, testCollConfig)
+	if err != nil {
+		t.Fatalf("Failed to create collection in engine: %v", err)
+	}
+
+	err = manager1.LogCreateCollection(ctx, "test_db", "test_coll", testCollConfig)
+	if err != nil {
+		t.Fatalf("Failed to log create collection: %v", err)
+	}
+
+	// Verify AOF has content before RDB save
+	aofStatsBefore := manager1.GetStats().AOFStats
+	if aofStatsBefore.CommandCount == 0 {
+		t.Error("AOF should contain commands before RDB save")
+	}
+
+	// Step 3: Create RDB snapshot (this should truncate AOF)
+	databases, err := engine1.GetDatabaseState(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get database state: %v", err)
+	}
+
+	err = manager1.SaveSnapshot(ctx, databases)
+	if err != nil {
+		t.Fatalf("Failed to save RDB snapshot: %v", err)
+	}
+
+	// Verify AOF was truncated after RDB save
+	aofStatsAfter := manager1.GetStats().AOFStats
+	if aofStatsAfter.CommandCount != 0 {
+		t.Errorf("AOF should be empty after RDB save, got %d commands", aofStatsAfter.CommandCount)
+	}
+
+	// Step 4: Add more data after RDB snapshot (this will only be in AOF)
+	newCollConfig := types.CollectionConfig{
+		Name:       "new_coll",
+		Metric:     types.DistanceMetricL2,
+		HNSWParams: types.HNSWParams{M: 16, EfConstruction: 200, EfSearch: 50},
+	}
+
+	err = manager1.LogCreateCollection(ctx, "test_db", "new_coll", newCollConfig)
+	if err != nil {
+		t.Fatalf("Failed to log create new collection: %v", err)
+	}
+
+	// Verify AOF now has the new command
+	aofStatsFinal := manager1.GetStats().AOFStats
+	if aofStatsFinal.CommandCount == 0 {
+		t.Error("AOF should contain new commands after RDB save")
+	}
+
+	manager1.Stop(ctx)
+
+	// Step 5: Create new engine and manager, recover data
+	engine2 := database.NewEngine()
+	manager2, err := NewManagerWithEngine(config, engine2)
+	if err != nil {
+		t.Fatalf("Failed to create second persistence manager: %v", err)
+	}
+	defer manager2.Stop(ctx)
+
+	err = manager2.Recover(ctx)
+	if err != nil {
+		t.Fatalf("Failed to recover data: %v", err)
+	}
+
+	// Step 6: Verify all data is present after recovery
+
+	// Database should exist (from RDB)
+	databases2, err := engine2.ListDatabases(ctx)
+	if err != nil {
+		t.Fatalf("Failed to list databases: %v", err)
+	}
+
+	if len(databases2) != 1 || databases2[0] != "test_db" {
+		t.Errorf("Expected 1 database 'test_db', got %v", databases2)
+	}
+
+	// Get the database to access collections
+	db, err := engine2.GetDatabase(ctx, "test_db")
+	if err != nil {
+		t.Fatalf("Failed to get database: %v", err)
+	}
+
+	// Original collection should exist (from RDB)
+	collections, err := db.ListCollections(ctx)
+	if err != nil {
+		t.Fatalf("Failed to list collections: %v", err)
+	}
+
+	expectedCollections := []string{"test_coll", "new_coll"}
+	if len(collections) != len(expectedCollections) {
+		t.Errorf("Expected %d collections, got %d: %v", len(expectedCollections), len(collections), collections)
+	}
+
+	collectionNames := make([]string, len(collections))
+	for i, collInfo := range collections {
+		collectionNames[i] = collInfo.Name
+	}
+
+	for _, expectedColl := range expectedCollections {
+		found := false
+		for _, actualColl := range collectionNames {
+			if actualColl == expectedColl {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected collection '%s' not found in %v", expectedColl, collectionNames)
+		}
+	}
+
+	// Verify both collections work correctly
+	for _, expectedColl := range expectedCollections {
+		info, err := db.GetCollectionInfo(ctx, expectedColl)
+		if err != nil {
+			t.Fatalf("Failed to get collection info for '%s': %v", expectedColl, err)
+		}
+
+		if info.Name != expectedColl {
+			t.Errorf("Collection name mismatch for '%s': got '%s'", expectedColl, info.Name)
+		}
+
+		if info.MetricType != types.DistanceMetricL2 {
+			t.Errorf("Collection metric mismatch for '%s': got %v", expectedColl, info.MetricType)
+		}
+	}
+}

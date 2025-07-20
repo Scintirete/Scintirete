@@ -37,6 +37,11 @@ func (s *Server) CreateDatabase(ctx context.Context, req *pb.CreateDatabaseReque
 		return nil, status.Error(codes.Internal, "failed to log create database operation")
 	}
 
+	// Log to audit
+	s.logAuditOperation(ctx, "CreateDatabase", req.Name, "", req.Auth, map[string]interface{}{
+		"operation_type": "database_management",
+	})
+
 	s.updateRequestStats()
 	return &emptypb.Empty{}, nil
 }
@@ -65,6 +70,11 @@ func (s *Server) DropDatabase(ctx context.Context, req *pb.DropDatabaseRequest) 
 	if err := s.persistence.LogDropDatabase(ctx, req.Name); err != nil {
 		return nil, status.Error(codes.Internal, "failed to log drop database operation")
 	}
+
+	// Log to audit
+	s.logAuditOperation(ctx, "DropDatabase", req.Name, "", req.Auth, map[string]interface{}{
+		"operation_type": "database_management",
+	})
 
 	s.updateRequestStats()
 	return &emptypb.Empty{}, nil

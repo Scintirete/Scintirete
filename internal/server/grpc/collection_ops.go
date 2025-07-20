@@ -65,6 +65,13 @@ func (s *Server) CreateCollection(ctx context.Context, req *pb.CreateCollectionR
 		return nil, status.Error(codes.Internal, "failed to log create collection operation")
 	}
 
+	// Log to audit
+	s.logAuditOperation(ctx, "CreateCollection", req.DbName, req.CollectionName, req.Auth, map[string]interface{}{
+		"operation_type": "collection_management",
+		"metric_type":    config.Metric.String(),
+		"hnsw_params":    config.HNSWParams,
+	})
+
 	s.updateRequestStats()
 	return &emptypb.Empty{}, nil
 }
@@ -105,6 +112,11 @@ func (s *Server) DropCollection(ctx context.Context, req *pb.DropCollectionReque
 	if err := s.persistence.LogDropCollection(ctx, req.DbName, req.CollectionName); err != nil {
 		return nil, status.Error(codes.Internal, "failed to log drop collection operation")
 	}
+
+	// Log to audit
+	s.logAuditOperation(ctx, "DropCollection", req.DbName, req.CollectionName, req.Auth, map[string]interface{}{
+		"operation_type": "collection_management",
+	})
 
 	s.updateRequestStats()
 	return &emptypb.Empty{}, nil

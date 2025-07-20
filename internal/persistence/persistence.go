@@ -301,7 +301,20 @@ func (m *Manager) SaveSnapshot(ctx context.Context, databases map[string]rdb.Dat
 		return err
 	}
 
+	// Since RDB snapshot now contains all current data,
+	// truncate the AOF file to avoid replay conflicts
+	if err := m.aofLogger.Truncate(); err != nil {
+		m.logger.Error(ctx, "Failed to truncate AOF after RDB save", err, map[string]interface{}{
+			"component": "persistence_rdb_save",
+		})
+		return utils.ErrPersistenceFailedWithCause("failed to truncate AOF after RDB save", err)
+	}
+
 	m.stats.LastRDBSave = time.Now()
+	m.logger.Info(ctx, "RDB snapshot saved and AOF truncated successfully", map[string]interface{}{
+		"component":      "persistence_rdb_save",
+		"database_count": len(databases),
+	})
 	return nil
 }
 
@@ -396,6 +409,19 @@ func (m *Manager) RewriteAOF(ctx context.Context, commands []types.AOFCommand) e
 	defer m.mu.Unlock()
 
 	if err := m.aofLogger.Rewrite(ctx, commands); err != nil {
+		return err
+	}
+
+	m.stats.LastAOFRewrite = time.Now()
+	return nil
+}
+
+// TruncateAOF clears the AOF file (removes all content)
+func (m *Manager) TruncateAOF(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if err := m.aofLogger.Truncate(); err != nil {
 		return err
 	}
 

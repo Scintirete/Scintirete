@@ -2,6 +2,11 @@
 package grpc
 
 import (
+	"context"
+	"crypto/sha256"
+	"fmt"
+
+	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 	"github.com/scintirete/scintirete/internal/utils"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -64,4 +69,22 @@ func mapToStruct(m map[string]interface{}) *structpb.Struct {
 	}
 
 	return s
+}
+
+// extractUserID extracts a simple user identifier from auth info
+func extractUserID(auth *pb.AuthInfo) string {
+	if auth == nil || auth.Password == "" {
+		return "anonymous"
+	}
+	// Create a simple user identifier based on password hash
+	// This provides basic user tracking while maintaining privacy
+	return fmt.Sprintf("user_%x", sha256.Sum256([]byte(auth.Password)))[:12]
+}
+
+// logAuditOperation logs an operation to the audit log if enabled
+func (s *Server) logAuditOperation(ctx context.Context, operation, database, collection string, auth *pb.AuthInfo, metadata map[string]interface{}) {
+	if s.auditLogger != nil && s.auditLogger.IsEnabled() {
+		userID := extractUserID(auth)
+		s.auditLogger.LogOperation(ctx, operation, database, collection, userID, metadata)
+	}
 }

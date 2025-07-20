@@ -81,8 +81,10 @@ message TextWithMetadata {
 
 // 搜索结果项
 message SearchResultItem {
-  Vector vector = 1; // 匹配到的向量（包含ID和元数据）
+  optional Vector vector = 1; // 匹配到的向量（包含ID和元数据），当 include_vector=false 时不返回
   float distance = 2; // 与查询向量的距离/相似度
+  string id = 3; // 向量ID，用于 include_vector=false 时标识结果
+  google.protobuf.Struct metadata = 4; // 元数据，当 include_vector=false 时单独返回
 }
 
 // 集合的元数据信息
@@ -181,7 +183,8 @@ message SearchRequest {
   repeated float query_vector = 4;
   int32 top_k = 5;
   optional int32 ef_search = 6; // HNSW 搜索时覆盖默认的 ef_search 参数
-  // string filter = 7; // 预留给未来的元数据过滤
+  optional bool include_vector = 7; // 是否在结果中包含向量数据，默认为 false 以提高性能
+  // string filter = 8; // 预留给未来的元数据过滤
 }
 
 message SearchResponse {
@@ -205,5 +208,6 @@ message EmbedAndSearchRequest {
   int32 top_k = 5;
   optional string embedding_model = 6;
   optional int32 ef_search = 7;
-  // string filter = 8;
+  optional bool include_vector = 8; // 是否在结果中包含向量数据，默认为 false 以提高性能
+  // string filter = 9;
 } 

@@ -11,6 +11,7 @@ import (
 	"github.com/scintirete/scintirete/internal/core"
 	"github.com/scintirete/scintirete/internal/core/database"
 	"github.com/scintirete/scintirete/internal/embedding"
+	"github.com/scintirete/scintirete/internal/observability/audit"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/server"
 )
@@ -25,6 +26,7 @@ type Server struct {
 	embedding   *embedding.Client
 	config      server.ServerConfig
 	logger      core.Logger
+	auditLogger *audit.Logger
 	auth        server.Authenticator
 
 	// Statistics
@@ -59,12 +61,31 @@ func NewServer(config server.ServerConfig) (*Server, error) {
 	//     "component": "grpc_server",
 	// })
 
+	// Create audit logger
+	var auditLogger *audit.Logger
+	if config.EnableAuditLog {
+		auditConfig := audit.Config{
+			Enabled:    true,
+			OutputPath: config.PersistenceConfig.DataDir + "/audit.log",
+			MaxSize:    10 * 1024 * 1024, // 10MB
+			MaxFiles:   5,                // Keep 5 rotated files
+		}
+		auditLogger, err = audit.NewLogger(auditConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create audit logger: %w", err)
+		}
+	} else {
+		// Create disabled audit logger
+		auditLogger, _ = audit.NewLogger(audit.Config{Enabled: false})
+	}
+
 	return &Server{
 		engine:      engine,
 		persistence: persistenceManager,
 		embedding:   embeddingClient,
 		config:      config,
 		logger:      serverLogger,
+		auditLogger: auditLogger,
 		auth:        auth,
 		startTime:   time.Now(),
 	}, nil
@@ -95,6 +116,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	// Close database engine
 	if err := s.engine.Close(ctx); err != nil {
 		return fmt.Errorf("failed to close database engine: %w", err)
+	}
+
+	// Close audit logger
+	if s.auditLogger != nil {
+		if err := s.auditLogger.Close(); err != nil {
+			return fmt.Errorf("failed to close audit logger: %w", err)
+		}
 	}
 
 	return nil
