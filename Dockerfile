@@ -58,8 +58,8 @@ WORKDIR /app
 # Copy binaries from builder stage
 COPY --from=builder /app/scintirete-server /app/scintirete-cli ./
 
-# Copy default configuration
-COPY --chown=scintirete:scintirete configs/scintirete.toml ./configs/
+# Copy configuration template (users should create scintirete.toml from template)
+COPY --chown=scintirete:scintirete configs/scintirete.template.toml ./configs/
 
 # Create data directory
 RUN mkdir -p /app/data && chown -R scintirete:scintirete /app
@@ -77,5 +77,5 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD ./scintirete-cli --help > /dev/null || exit 1
 
-# Default command
+# Default command (expects scintirete.toml to be mounted or created from template)
 CMD ["./scintirete-server", "--config", "configs/scintirete.toml"] 

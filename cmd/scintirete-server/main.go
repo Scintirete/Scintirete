@@ -14,37 +14,33 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 	"github.com/scintirete/scintirete/internal/config"
+	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/server"
+	grpcserver "github.com/scintirete/scintirete/internal/server/grpc"
+	httpserver "github.com/scintirete/scintirete/internal/server/http"
 )
 
 var (
-	// Build-time variables
-	version = "dev"
-	commit  = "unknown"
-
-	// Command line flags
-	configFile  = flag.String("config", "scintirete.toml", "Path to configuration file")
-	grpcHost    = flag.String("grpc.host", "", "Override gRPC host from config")
-	grpcPort    = flag.Int("grpc.port", 0, "Override gRPC port from config")
-	httpPort    = flag.Int("http.port", 0, "Override HTTP port from config")
-	dataDir     = flag.String("data-dir", "", "Override data directory from config")
-	logLevel    = flag.String("log.level", "", "Override log level from config")
-	showVersion = flag.Bool("version", false, "Show version information")
+	configFile = flag.String("config", "configs/scintirete.toml", "Path to configuration file")
+	logLevel   = flag.String("log-level", "", "Log level (debug, info, warn, error)")
+	help       = flag.Bool("help", false, "Show help message")
 )
 
 func main() {
 	flag.Parse()
 
-	if *showVersion {
-		fmt.Printf("Scintirete Server %s\n", version)
-		fmt.Printf("Commit: %s\n", commit)
-		fmt.Println("A lightweight vector database with HNSW indexing")
+	if *help {
+		flag.Usage()
 		return
 	}
+
+	// Print banner
+	printBanner()
 
 	// Load configuration
 	cfg, err := config.LoadConfig(*configFile)
@@ -52,19 +48,7 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Apply command line overrides
-	if *grpcHost != "" {
-		cfg.Server.GRPCHost = *grpcHost
-	}
-	if *grpcPort != 0 {
-		cfg.Server.GRPCPort = *grpcPort
-	}
-	if *httpPort != 0 {
-		cfg.Server.HTTPPort = *httpPort
-	}
-	if *dataDir != "" {
-		cfg.Persistence.DataDir = *dataDir
-	}
+	// Override log level from command line
 	if *logLevel != "" {
 		cfg.Log.Level = *logLevel
 	}
@@ -72,7 +56,7 @@ func main() {
 	// Note: Configuration validation can be added here if needed
 
 	// Create server configuration
-	serverConfig := server.Config{
+	serverConfig := server.ServerConfig{
 		Passwords: cfg.Server.Passwords,
 		PersistenceConfig: persistence.Config{
 			DataDir:         cfg.Persistence.DataDir,
@@ -83,12 +67,17 @@ func main() {
 			AOFRewriteSize:  64 * 1024 * 1024,
 			BackupRetention: 7,
 		},
+		EmbeddingConfig: embedding.Config{
+			BaseURL: cfg.Embedding.BaseURL,
+			APIKey:  cfg.Embedding.APIKey,
+			Timeout: 30 * time.Second, // Use default timeout
+		},
 		EnableMetrics:  cfg.Observability.MetricsEnabled,
 		EnableAuditLog: cfg.Log.EnableAuditLog,
 	}
 
 	// Create gRPC server
-	grpcServer, err := server.NewGRPCServer(serverConfig)
+	grpcServer, err := grpcserver.NewServer(serverConfig)
 	if err != nil {
 		log.Fatalf("Failed to create gRPC server: %v", err)
 	}
@@ -117,6 +106,7 @@ func main() {
 
 		s := grpc.NewServer()
 		pb.RegisterScintireteServiceServer(s, grpcServer)
+		reflection.Register(s)
 
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Failed to serve gRPC: %v", err)
@@ -124,7 +114,7 @@ func main() {
 	}()
 
 	// Start HTTP gateway server
-	httpServer := server.NewHTTPServer(grpcServer)
+	httpServer := httpserver.NewServer(grpcServer)
 	httpAddr := cfg.GetHTTPAddress()
 
 	go func() {
@@ -142,13 +132,26 @@ func main() {
 	<-shutdown
 	log.Println("Shutting down server...")
 
-	// Graceful shutdown with timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	if err := grpcServer.Stop(shutdownCtx); err != nil {
+	// Graceful shutdown
+	cancel()
+	if err := grpcServer.Stop(ctx); err != nil {
 		log.Printf("Error during server shutdown: %v", err)
 	}
 
-	log.Println("Server stopped")
+	log.Println("Server shutdown complete")
+}
+
+func printBanner() {
+	banner := `
+   _____ _____ _____ _   _ _______ _____ _____  ______ _______ ______ 
+  / ____/ ____|_   _| \ | |__   __|_   _|  __ \|  ____|__   __|  ____|
+ | (___| |      | | |  \| |  | |    | | | |__) | |__     | |  | |__   
+  \___ \ |      | | | . ' |  | |    | | |  _  /|  __|    | |  |  __|  
+  ____) | |____ _| |_| |\  |  | |   _| |_| | \ \| |____   | |  | |____ 
+ |_____/ \_____|_____|_| \_|  |_|  |_____|_|  \_\______|  |_|  |______|
+                                                                      
+`
+	fmt.Println(banner)
+	fmt.Println("High-Performance Vector Database")
+	fmt.Println()
 }

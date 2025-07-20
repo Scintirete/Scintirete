@@ -35,3 +35,7 @@ scintirete-server
 scintirete-cli
 bin/scintirete-cli
 bin/scintirete-server
+data/
+
+# Configuration files (use template instead)
+configs/scintirete.toml

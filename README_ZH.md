@@ -76,12 +76,18 @@ docker-compose up -d
 export OPENAI_API_KEY="your-api-key-here"
 ```
 
-编辑配置文件 `scintirete.toml`：
+首先从模板创建配置文件，然后编辑：
+
+```bash
+cp configs/scintirete.template.toml configs/scintirete.toml
+```
+
+编辑配置文件 `configs/scintirete.toml`：
 
 ```toml
 [embedding]
 base_url = "https://api.openai.com/v1/embeddings"
-api_key_env_var = "OPENAI_API_KEY"
+api_key = "your-openai-api-key"
 ```
 
 #### 3. 基本操作
@@ -168,7 +174,7 @@ aof_sync_strategy = "everysec"
 
 [embedding]
 base_url = "https://api.openai.com/v1/embeddings"
-api_key_env_var = "OPENAI_API_KEY"
+api_key = "your-openai-api-key"
 rpm_limit = 3500
 tpm_limit = 90000
 ```

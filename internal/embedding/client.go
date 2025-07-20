@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -41,19 +40,16 @@ type rateCounter struct {
 
 // Config contains embedding client configuration
 type Config struct {
-	BaseURL      string
-	APIKeyEnvVar string
-	RPMLimit     int
-	TPMLimit     int
-	Timeout      time.Duration
+	BaseURL  string
+	APIKey   string
+	RPMLimit int
+	TPMLimit int
+	Timeout  time.Duration
 }
 
 // NewClient creates a new embedding client
 func NewClient(config Config) (*Client, error) {
-	var apiKey string
-	if config.APIKeyEnvVar != "" {
-		apiKey = os.Getenv(config.APIKeyEnvVar)
-	}
+	apiKey := config.APIKey
 
 	if config.Timeout == 0 {
 		config.Timeout = 30 * time.Second

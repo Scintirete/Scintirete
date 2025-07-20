@@ -12,6 +12,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+    
+    - name: Copy config file
+      run: |
+        cp configs/scintirete.template.toml configs/scintirete.toml
 
     - name: Set up Go
       uses: actions/setup-go@v4
