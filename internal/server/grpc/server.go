@@ -37,8 +37,8 @@ func NewServer(config server.ServerConfig) (*Server, error) {
 	// Create database engine
 	engine := database.NewEngine()
 
-	// Create persistence manager
-	persistenceManager, err := persistence.NewManager(config.PersistenceConfig)
+	// Create persistence manager with database engine connection
+	persistenceManager, err := persistence.NewManagerWithEngine(config.PersistenceConfig, engine)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create persistence manager: %w", err)
 	}

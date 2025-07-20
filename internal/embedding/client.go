@@ -109,21 +109,22 @@ func (c *Client) GetEmbeddings(ctx context.Context, texts []string, model string
 		return nil, fmt.Errorf("embedding functionality requires API key to be configured")
 	}
 
+	// disable limiting checking for now
 	// Estimate token count (rough approximation: 1 token ≈ 4 characters)
-	totalChars := 0
-	for _, text := range texts {
-		totalChars += len(text)
-	}
-	estimatedTokens := totalChars / 4
+	// totalChars := 0
+	// for _, text := range texts {
+	// 	totalChars += len(text)
+	// }
+	// estimatedTokens := totalChars / 4
 
 	// Check rate limits
-	if !c.rpmCounter.canProceed(1) {
-		return nil, fmt.Errorf("RPM limit exceeded")
-	}
+	// if !c.rpmCounter.canProceed(1) {
+	// 	return nil, fmt.Errorf("RPM limit exceeded")
+	// }
 
-	if !c.tpmCounter.canProceed(estimatedTokens) {
-		return nil, fmt.Errorf("TPM limit exceeded")
-	}
+	// if !c.tpmCounter.canProceed(estimatedTokens) {
+	// 	return nil, fmt.Errorf("TPM limit exceeded")
+	// }
 
 	// Prepare request
 	reqBody := types.EmbeddingRequest{
