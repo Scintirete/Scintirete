@@ -1,5 +1,5 @@
 # Multi-stage Docker build for Scintirete
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Build arguments
 ARG VERSION=dev
