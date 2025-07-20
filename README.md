@@ -4,7 +4,7 @@
 [![Release](https://github.com/scintirete/scintirete/actions/workflows/release.yml/badge.svg)](https://github.com/scintirete/scintirete/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[中文文档](README_ZH.md) | [Data Structure Design](docs/2_数据结构设计.md)
+[中文文档](README_ZH.md) | [Documentation](docs/)
 
 Scintirete is a lightweight, production-ready vector database built on the HNSW (Hierarchical Navigable Small World) algorithm. The name derives from Latin words "Scintilla" (spark) and "Rete" (network), symbolizing a sparkling network that illuminates the crucial connections within complex data landscapes through deep similarity matching.
 
@@ -141,7 +141,7 @@ Scintirete implements a modern vector database architecture with the following c
 - **Embedding Integration**: OpenAI-compatible API integration for automatic text vectorization
 - **Observability**: Comprehensive logging, metrics, and audit trails
 
-For detailed technical documentation, see [Architecture & Data Structure Design](docs/2_数据结构设计.md).
+For detailed technical documentation, see the [docs/](docs/) directory.
 
 ## Configuration
 
@@ -178,7 +178,7 @@ Scintirete provides both gRPC and HTTP/JSON APIs:
 - **gRPC**: High-performance interface defined in [protobuf](api/proto/scintirete/v1/scintirete.proto)
 - **HTTP/JSON**: RESTful interface accessible at `http://localhost:8080/`
 
-For comprehensive API documentation and usage examples, refer to the [detailed documentation](docs/2_数据结构设计.md).
+For comprehensive API documentation and usage examples, refer to the [documentation](docs/).
 
 ## Performance Considerations
 
@@ -240,7 +240,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Documentation**: [Comprehensive Guide](docs/2_数据结构设计.md)
+- **Documentation**: [Documentation](docs/)
 - **Issues**: [GitHub Issues](https://github.com/scintirete/scintirete/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/scintirete/scintirete/discussions)
 

@@ -52,12 +52,23 @@ func TestNewClient_MissingAPIKey(t *testing.T) {
 	}
 
 	client, err := NewClient(config)
-	if err == nil {
-		t.Fatal("Expected error for missing API key")
+	if err != nil {
+		t.Fatalf("Client creation should succeed even without API key, got error: %v", err)
 	}
 
-	if client != nil {
-		t.Fatal("Client should be nil when API key is missing")
+	if client == nil {
+		t.Fatal("Client should not be nil")
+	}
+
+	// Verify that embedding operations fail when API key is missing
+	_, err = client.GetEmbeddings(context.Background(), []string{"test"}, "text-embedding-ada-002")
+	if err == nil {
+		t.Fatal("Expected error when calling GetEmbeddings without API key")
+	}
+
+	expectedErrMsg := "embedding functionality requires API key to be configured"
+	if err.Error() != expectedErrMsg {
+		t.Errorf("Expected error message %q, got %q", expectedErrMsg, err.Error())
 	}
 }
 

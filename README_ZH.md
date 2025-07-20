@@ -4,7 +4,7 @@
 [![Release](https://github.com/scintirete/scintirete/actions/workflows/release.yml/badge.svg)](https://github.com/scintirete/scintirete/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[English](README.md) | [数据结构设计](docs/2_数据结构设计.md)
+[English](README.md) | [文档](docs/)
 
 Scintirete 是一款基于 HNSW（分层导航小世界）算法实现的轻量级、面向生产的向量数据库。它的名字源于拉丁语 Scintilla（火花）和 Rete（网络），意为闪光的火花之网，寓意着在庞杂的数据网络中，用数据间最深层的相似性点亮那些微小却关键的"火花"。
 
@@ -141,7 +141,7 @@ Scintirete 实现了现代向量数据库架构，包含以下组件：
 - **嵌入集成**: OpenAI 兼容 API 集成，支持自动文本向量化
 - **可观测性**: 全面的日志记录、指标监控和审计跟踪
 
-详细的技术文档请参阅 [架构与数据结构设计](docs/2_数据结构设计.md)。
+详细的技术文档请参阅 [docs/](docs/) 目录。
 
 ## 配置
 
@@ -178,7 +178,7 @@ Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
 - **gRPC**: 高性能接口，定义在 [protobuf](api/proto/scintirete/v1/scintirete.proto) 中
 - **HTTP/JSON**: RESTful 接口，可通过 `http://localhost:8080/` 访问
 
-全面的 API 文档和使用示例请参考 [详细文档](docs/2_数据结构设计.md)。
+全面的 API 文档和使用示例请参考 [文档](docs/)。
 
 ## 性能考虑
 
@@ -240,7 +240,7 @@ Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
 
 ## 支持
 
-- **文档**: [全面指南](docs/2_数据结构设计.md)
+- **文档**: [文档](docs/)
 - **问题**: [GitHub Issues](https://github.com/scintirete/scintirete/issues)
 - **讨论**: [GitHub Discussions](https://github.com/scintirete/scintirete/discussions)
 
