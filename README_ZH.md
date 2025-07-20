@@ -70,11 +70,7 @@ docker-compose up -d
 
 #### 2. 环境初始化（支持文本嵌入功能）
 
-要使用文本嵌入功能，请配置您的 OpenAI 兼容 API：
-
-```bash
-export OPENAI_API_KEY="your-api-key-here"
-```
+要使用文本嵌入功能，请配置您的 OpenAI 兼容 API，配置文件 `configs/scintirete.toml` 中 `[embedding]` 表定义了与外部文本嵌入服务交互的配置
 
 首先从模板创建配置文件，然后编辑：
 
@@ -85,9 +81,16 @@ cp configs/scintirete.template.toml configs/scintirete.toml
 编辑配置文件 `configs/scintirete.toml`：
 
 ```toml
+# [embedding] 表定义了与外部文本嵌入服务交互的配置
 [embedding]
+# 符合 OpenAI `embeddings` 接口规范的 API base URL
 base_url = "https://api.openai.com/v1/embeddings"
-api_key = "your-openai-api-key"
+# API Token/Key。为了安全，建议使用强密码或令牌。
+api_key = ""
+# 每分钟请求数限制 (RPM)
+rpm_limit = 3500
+# 每分钟 Token 数限制 (TPM)
+tpm_limit = 90000
 ```
 
 #### 3. 基本操作
