@@ -159,40 +159,131 @@ func (m *Manager) Recover(ctx context.Context) error {
 
 	commandCount := int64(0)
 
+	// Check if database engine is connected
+	if m.cmdApplier == nil {
+		m.logger.Error(ctx, "AOF recovery disabled: database engine not connected to persistence manager", nil, map[string]interface{}{
+			"component": "persistence_recovery",
+			"message":   "Data recovery will be incomplete - AOF commands will be read but not applied to database",
+		})
+	} else {
+		m.logger.Info(ctx, "Starting data recovery with database engine connected", map[string]interface{}{
+			"component": "persistence_recovery",
+		})
+	}
+
 	// Step 1: Load RDB snapshot if it exists
+	m.logger.Debug(ctx, "Attempting to load RDB snapshot", map[string]interface{}{
+		"component": "persistence_recovery",
+	})
+
 	snapshot, err := m.rdbManager.Load(ctx)
 	if err != nil {
+		m.logger.Error(ctx, "Failed to load RDB snapshot", err, map[string]interface{}{
+			"component": "persistence_recovery",
+		})
 		return utils.ErrRecoveryFailed("failed to load RDB snapshot: " + err.Error())
 	}
 
 	if snapshot != nil {
+		m.logger.Info(ctx, "RDB snapshot found, applying to database", map[string]interface{}{
+			"component":      "persistence_recovery",
+			"snapshot_time":  snapshot.Timestamp,
+			"database_count": len(snapshot.Databases),
+		})
+
 		// Apply RDB snapshot to database engine if command applier is available
 		if m.cmdApplier != nil {
 			if err := m.cmdApplier.ApplySnapshot(ctx, snapshot); err != nil {
+				m.logger.Error(ctx, "Failed to apply RDB snapshot to database engine", err, map[string]interface{}{
+					"component": "persistence_recovery",
+				})
 				return utils.ErrRecoveryFailed("failed to apply RDB snapshot: " + err.Error())
 			}
+			m.logger.Info(ctx, "RDB snapshot successfully applied to database engine", map[string]interface{}{
+				"component": "persistence_recovery",
+			})
+		} else {
+			m.logger.Warn(ctx, "RDB snapshot loaded but cannot be applied: database engine not connected", map[string]interface{}{
+				"component": "persistence_recovery",
+			})
 		}
+	} else {
+		m.logger.Info(ctx, "No RDB snapshot found, proceeding with AOF-only recovery", map[string]interface{}{
+			"component": "persistence_recovery",
+		})
 	}
 
 	// Step 2: Replay AOF commands
+	m.logger.Debug(ctx, "Starting AOF replay", map[string]interface{}{
+		"component": "persistence_recovery",
+	})
+
 	err = m.aofLogger.Replay(ctx, func(command types.AOFCommand) error {
 		commandCount++
+
+		// Log every 1000 commands to show progress
+		if commandCount%1000 == 0 {
+			m.logger.Debug(ctx, "AOF replay progress", map[string]interface{}{
+				"component":         "persistence_recovery",
+				"commands_replayed": commandCount,
+			})
+		}
+
 		// Apply command to database engine if command applier is available
 		if m.cmdApplier != nil {
 			if err := m.cmdApplier.ApplyCommand(ctx, command); err != nil {
+				m.logger.Error(ctx, "Failed to apply AOF command to database engine", err, map[string]interface{}{
+					"component":   "persistence_recovery",
+					"command":     command.Command,
+					"database":    command.Database,
+					"collection":  command.Collection,
+					"command_num": commandCount,
+				})
 				return utils.ErrRecoveryFailed("failed to apply AOF command: " + err.Error())
 			}
+		} else {
+			// AOF command read but not applied - this is the data loss scenario!
+			m.logger.Warn(ctx, "AOF command read but not applied to database (engine not connected)", map[string]interface{}{
+				"component":   "persistence_recovery",
+				"command":     command.Command,
+				"database":    command.Database,
+				"collection":  command.Collection,
+				"command_num": commandCount,
+			})
 		}
 		return nil
 	})
 
 	if err != nil {
+		m.logger.Error(ctx, "Failed to replay AOF commands", err, map[string]interface{}{
+			"component":         "persistence_recovery",
+			"commands_replayed": commandCount,
+		})
 		return utils.ErrRecoveryFailed("failed to replay AOF: " + err.Error())
 	}
 
 	// Update statistics
 	m.stats.RecoveryTime = time.Since(startTime)
 	m.stats.RecoveredCommands = commandCount
+
+	// Log recovery completion
+	if m.cmdApplier != nil {
+		m.logger.Info(ctx, "Data recovery completed successfully", map[string]interface{}{
+			"component":         "persistence_recovery",
+			"recovery_time":     m.stats.RecoveryTime.String(),
+			"commands_replayed": commandCount,
+			"has_rdb_snapshot":  snapshot != nil,
+		})
+	} else {
+		m.logger.Warn(ctx, "Data recovery completed but with data loss", map[string]interface{}{
+			"component":        "persistence_recovery",
+			"recovery_time":    m.stats.RecoveryTime.String(),
+			"commands_read":    commandCount,
+			"commands_applied": 0,
+			"has_rdb_snapshot": snapshot != nil,
+			"data_loss_reason": "database engine not connected to persistence manager",
+		})
+	}
 
 	return nil
 }
@@ -210,7 +301,20 @@ func (m *Manager) SaveSnapshot(ctx context.Context, databases map[string]rdb.Dat
 		return err
 	}
 
+	// Since RDB snapshot now contains all current data,
+	// truncate the AOF file to avoid replay conflicts
+	if err := m.aofLogger.Truncate(); err != nil {
+		m.logger.Error(ctx, "Failed to truncate AOF after RDB save", err, map[string]interface{}{
+			"component": "persistence_rdb_save",
+		})
+		return utils.ErrPersistenceFailedWithCause("failed to truncate AOF after RDB save", err)
+	}
+
 	m.stats.LastRDBSave = time.Now()
+	m.logger.Info(ctx, "RDB snapshot saved and AOF truncated successfully", map[string]interface{}{
+		"component":      "persistence_rdb_save",
+		"database_count": len(databases),
+	})
 	return nil
 }
 
@@ -229,9 +333,17 @@ func (m *Manager) StartBackgroundTasks(ctx context.Context) error {
 
 // Stop gracefully stops all persistence operations
 func (m *Manager) Stop(ctx context.Context) error {
-	// Stop background tasks
-	close(m.stopTasks)
-	m.taskWG.Wait()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Stop background tasks if not already stopped
+	select {
+	case <-m.stopTasks:
+		// Already closed
+	default:
+		close(m.stopTasks)
+		m.taskWG.Wait()
+	}
 
 	// Close persistence components
 	if err := m.aofLogger.Close(); err != nil {
@@ -297,6 +409,19 @@ func (m *Manager) RewriteAOF(ctx context.Context, commands []types.AOFCommand) e
 	defer m.mu.Unlock()
 
 	if err := m.aofLogger.Rewrite(ctx, commands); err != nil {
+		return err
+	}
+
+	m.stats.LastAOFRewrite = time.Now()
+	return nil
+}
+
+// TruncateAOF clears the AOF file (removes all content)
+func (m *Manager) TruncateAOF(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if err := m.aofLogger.Truncate(); err != nil {
 		return err
 	}
 

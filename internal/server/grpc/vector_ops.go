@@ -3,7 +3,6 @@ package grpc
 
 import (
 	"context"
-	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -87,6 +86,12 @@ func (s *Server) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest
 		return nil, status.Error(codes.Internal, "failed to log insert vectors operation")
 	}
 
+	// Log to audit
+	s.logAuditOperation(ctx, "InsertVectors", req.DbName, req.CollectionName, req.Auth, map[string]interface{}{
+		"operation_type": "vector_data",
+		"vector_count":   len(vectors),
+	})
+
 	s.updateRequestStats()
 	return &emptypb.Empty{}, nil
 }
@@ -140,6 +145,13 @@ func (s *Server) DeleteVectors(ctx context.Context, req *pb.DeleteVectorsRequest
 	if err := s.persistence.LogDeleteVectors(ctx, req.DbName, req.CollectionName, req.Ids); err != nil {
 		return nil, status.Error(codes.Internal, "failed to log delete vectors operation")
 	}
+
+	// Log to audit
+	s.logAuditOperation(ctx, "DeleteVectors", req.DbName, req.CollectionName, req.Auth, map[string]interface{}{
+		"operation_type":  "vector_data",
+		"requested_count": len(req.Ids),
+		"actual_deleted":  deletedCount,
+	})
 
 	s.updateRequestStats()
 	return &pb.DeleteVectorsResponse{DeletedCount: int32(deletedCount)}, nil
@@ -202,6 +214,12 @@ func (s *Server) Search(ctx context.Context, req *pb.SearchRequest) (*pb.SearchR
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// Check if we should include vector data (default: false for performance)
+	includeVector := false
+	if req.IncludeVector != nil {
+		includeVector = *req.IncludeVector
+	}
+
 	// Convert results to protobuf
 	pbResults := make([]*pb.SearchResultItem, len(results))
 	for i, result := range results {
@@ -211,14 +229,22 @@ func (s *Server) Search(ctx context.Context, req *pb.SearchRequest) (*pb.SearchR
 			return nil, status.Error(codes.Internal, "failed to convert metadata")
 		}
 
-		pbResults[i] = &pb.SearchResultItem{
+		// Build result item - Vector object is always included with id and metadata
+		item := &pb.SearchResultItem{
+			Distance: result.Distance,
+			Id:       result.Vector.ID,
+			Metadata: metadata,
 			Vector: &pb.Vector{
 				Id:       result.Vector.ID,
-				Elements: result.Vector.Elements,
 				Metadata: metadata,
 			},
-			Distance: result.Distance,
 		}
+
+		// Only include vector elements if explicitly requested
+		if includeVector {
+			item.Vector.Elements = result.Vector.Elements
+		}
+		pbResults[i] = item
 	}
 
 	s.updateRequestStats()
@@ -292,23 +318,30 @@ func (s *Server) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertReque
 		return nil, status.Errorf(codes.Internal, "failed to insert vectors: %v", err)
 	}
 
-	// Log the operation to AOF
-	command := types.AOFCommand{
-		Timestamp:  time.Now(),
-		Command:    "EmbedAndInsert",
-		Database:   req.DbName,
-		Collection: req.CollectionName,
-		Args: map[string]interface{}{
-			"texts": texts,
-			"model": model,
-		},
-	}
-
-	if err := s.persistence.WriteAOF(ctx, command); err != nil {
+	// Log the actual data operation (INSERT_VECTORS) to AOF - this is what actually happened at data level
+	if err := s.persistence.LogInsertVectors(ctx, req.DbName, req.CollectionName, vectors); err != nil {
 		// Log error but don't fail the operation - AOF write failure shouldn't block operation
-		// TODO: Add proper error handling and logging when logger system is fully integrated
+		if s.logger != nil {
+			s.logger.Error(ctx, "AOF write failed for EmbedAndInsert operation", err, map[string]interface{}{
+				"operation":    "EmbedAndInsert",
+				"database":     req.DbName,
+				"collection":   req.CollectionName,
+				"vector_count": len(vectors),
+			})
+		}
+		// Note: Operation continues successfully even if AOF write fails
+		// This ensures user operations aren't blocked by persistence issues
 	}
 
+	// Log the auxiliary operation (EmbedAndInsert) to audit log for tracking purposes
+	s.logAuditOperation(ctx, "EmbedAndInsert", req.DbName, req.CollectionName, req.Auth, map[string]interface{}{
+		"operation_type":  "auxiliary",
+		"embedding_model": model,
+		"text_count":      len(texts),
+		"vector_count":    len(vectors),
+	})
+
+	s.updateRequestStats()
 	return &emptypb.Empty{}, nil
 }
 
@@ -378,17 +411,32 @@ func (s *Server) EmbedAndSearch(ctx context.Context, req *pb.EmbedAndSearchReque
 		return nil, status.Errorf(codes.Internal, "failed to perform search: %v", err)
 	}
 
+	// Check if we should include vector data (default: false for performance)
+	includeVector := false
+	if req.IncludeVector != nil {
+		includeVector = *req.IncludeVector
+	}
+
 	// Convert results to protobuf format
 	pbResults := make([]*pb.SearchResultItem, len(results))
 	for i, result := range results {
-		pbResults[i] = &pb.SearchResultItem{
+		// Build result item - Vector object is always included with id and metadata
+		item := &pb.SearchResultItem{
+			Distance: result.Distance,
+			Id:       result.Vector.ID,
+			Metadata: mapToStruct(result.Vector.Metadata),
 			Vector: &pb.Vector{
 				Id:       result.Vector.ID,
-				Elements: result.Vector.Elements,
 				Metadata: mapToStruct(result.Vector.Metadata),
 			},
-			Distance: result.Distance,
 		}
+
+		// Only include vector elements if explicitly requested
+		if includeVector {
+			item.Vector.Elements = result.Vector.Elements
+		}
+
+		pbResults[i] = item
 	}
 
 	return &pb.SearchResponse{

@@ -70,11 +70,7 @@ The server will start with:
 
 #### 2. Environment Setup with Embedding Support
 
-To use the text embedding features, configure your OpenAI-compatible API:
-
-```bash
-export OPENAI_API_KEY="your-api-key-here"
-```
+To use the text embedding features, configure your OpenAI-compatible API, the `[embedding]` section in the configuration file `configs/scintirete.toml` defines the configuration for interacting with the external text embedding service
 
 First create the configuration file from template, then edit it:
 
@@ -87,7 +83,9 @@ Edit the configuration file `configs/scintirete.toml`:
 ```toml
 [embedding]
 base_url = "https://api.openai.com/v1/embeddings"
-api_key = "your-openai-api-key"
+api_key = ""
+rpm_limit = 3500
+tpm_limit = 90000
 ```
 
 #### 3. Basic Operations

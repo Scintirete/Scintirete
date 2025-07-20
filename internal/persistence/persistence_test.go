@@ -454,6 +454,101 @@ func TestManager_RewriteAOF(t *testing.T) {
 	}
 }
 
+func TestManager_SaveSnapshotTruncatesAOF(t *testing.T) {
+	tempDir := t.TempDir()
+	config := DefaultConfig(tempDir)
+	config.AOFSyncStrategy = "always" // Force immediate sync for testing
+
+	manager, err := NewManager(config)
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+	defer manager.Stop(context.Background())
+
+	ctx := context.Background()
+
+	// Step 1: Write some AOF commands first
+	err = manager.LogCreateDatabase(ctx, "test_db")
+	if err != nil {
+		t.Fatalf("LogCreateDatabase failed: %v", err)
+	}
+
+	err = manager.LogCreateCollection(ctx, "test_db", "test_coll", types.CollectionConfig{
+		Name:   "test_coll",
+		Metric: types.DistanceMetricL2,
+		HNSWParams: types.HNSWParams{
+			M:              16,
+			EfConstruction: 200,
+			EfSearch:       50,
+		},
+	})
+	if err != nil {
+		t.Fatalf("LogCreateCollection failed: %v", err)
+	}
+
+	// Step 2: Verify AOF has some content
+	aofStats := manager.GetStats().AOFStats
+	if aofStats.CommandCount == 0 {
+		t.Error("AOF should contain commands before snapshot")
+	}
+	if aofStats.FileSize == 0 {
+		t.Error("AOF file should have content before snapshot")
+	}
+
+	// Step 3: Create and save RDB snapshot
+	databases := map[string]rdb.DatabaseState{
+		"test_db": {
+			Name: "test_db",
+			Collections: map[string]rdb.CollectionState{
+				"test_coll": {
+					Name: "test_coll",
+					Config: types.CollectionConfig{
+						Name:   "test_coll",
+						Metric: types.DistanceMetricL2,
+						HNSWParams: types.HNSWParams{
+							M:              16,
+							EfConstruction: 200,
+							EfSearch:       50,
+						},
+					},
+					Vectors:      []types.Vector{},
+					VectorCount:  0,
+					DeletedCount: 0,
+					CreatedAt:    time.Now(),
+					UpdatedAt:    time.Now(),
+				},
+			},
+			CreatedAt: time.Now(),
+		},
+	}
+
+	err = manager.SaveSnapshot(ctx, databases)
+	if err != nil {
+		t.Fatalf("SaveSnapshot failed: %v", err)
+	}
+
+	// Step 4: Verify AOF was truncated after RDB save
+	aofStatsAfter := manager.GetStats().AOFStats
+	if aofStatsAfter.CommandCount != 0 {
+		t.Errorf("AOF command count should be 0 after RDB save, got %d", aofStatsAfter.CommandCount)
+	}
+
+	// Note: FileSize might not be exactly 0 due to buffering, but it should be very small
+	if aofStatsAfter.FileSize > 100 {
+		t.Errorf("AOF file size should be small after truncation, got %d bytes", aofStatsAfter.FileSize)
+	}
+
+	// Step 5: Verify RDB was created successfully
+	stats := manager.GetStats()
+	if stats.LastRDBSave.IsZero() {
+		t.Error("LastRDBSave should be set after SaveSnapshot")
+	}
+
+	if stats.RDBInfo == nil || !stats.RDBInfo.Exists {
+		t.Error("RDB file should exist after SaveSnapshot")
+	}
+}
+
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||

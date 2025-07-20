@@ -235,13 +235,14 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// resolvePaths converts relative paths to absolute paths based on config file location.
+// resolvePaths converts relative paths to absolute paths based on project root file location.
 func (c *Config) resolvePaths(configFilePath string) error {
 	configDir := filepath.Dir(configFilePath)
+	rootDir := configDir + "/.."
 
 	// Resolve data directory path
 	if !filepath.IsAbs(c.Persistence.DataDir) {
-		c.Persistence.DataDir = filepath.Join(configDir, c.Persistence.DataDir)
+		c.Persistence.DataDir = filepath.Join(rootDir, c.Persistence.DataDir)
 	}
 
 	return nil

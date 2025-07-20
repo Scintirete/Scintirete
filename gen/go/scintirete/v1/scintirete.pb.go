@@ -254,8 +254,10 @@ func (x *TextWithMetadata) GetMetadata() *structpb.Struct {
 // 搜索结果项
 type SearchResultItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Vector        *Vector                `protobuf:"bytes,1,opt,name=vector,proto3" json:"vector,omitempty"`       // 匹配到的向量（包含ID和元数据）
+	Vector        *Vector                `protobuf:"bytes,1,opt,name=vector,proto3,oneof" json:"vector,omitempty"` // 匹配到的向量（包含ID和元数据），当 include_vector=false 时不返回
 	Distance      float32                `protobuf:"fixed32,2,opt,name=distance,proto3" json:"distance,omitempty"` // 与查询向量的距离/相似度
+	Id            string                 `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`               // 向量ID，用于 include_vector=false 时标识结果
+	Metadata      *structpb.Struct       `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`   // 元数据，当 include_vector=false 时单独返回
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -302,6 +304,20 @@ func (x *SearchResultItem) GetDistance() float32 {
 		return x.Distance
 	}
 	return 0
+}
+
+func (x *SearchResultItem) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SearchResultItem) GetMetadata() *structpb.Struct {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
 }
 
 // 集合的元数据信息
@@ -1116,7 +1132,8 @@ type SearchRequest struct {
 	CollectionName string                 `protobuf:"bytes,3,opt,name=collection_name,json=collectionName,proto3" json:"collection_name,omitempty"`
 	QueryVector    []float32              `protobuf:"fixed32,4,rep,packed,name=query_vector,json=queryVector,proto3" json:"query_vector,omitempty"`
 	TopK           int32                  `protobuf:"varint,5,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
-	EfSearch       *int32                 `protobuf:"varint,6,opt,name=ef_search,json=efSearch,proto3,oneof" json:"ef_search,omitempty"` // HNSW 搜索时覆盖默认的 ef_search 参数
+	EfSearch       *int32                 `protobuf:"varint,6,opt,name=ef_search,json=efSearch,proto3,oneof" json:"ef_search,omitempty"`                // HNSW 搜索时覆盖默认的 ef_search 参数
+	IncludeVector  *bool                  `protobuf:"varint,7,opt,name=include_vector,json=includeVector,proto3,oneof" json:"include_vector,omitempty"` // 是否在结果中包含向量数据，默认为 false 以提高性能
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1191,6 +1208,13 @@ func (x *SearchRequest) GetEfSearch() int32 {
 		return *x.EfSearch
 	}
 	return 0
+}
+
+func (x *SearchRequest) GetIncludeVector() bool {
+	if x != nil && x.IncludeVector != nil {
+		return *x.IncludeVector
+	}
+	return false
 }
 
 type SearchResponse struct {
@@ -1322,7 +1346,8 @@ type EmbedAndSearchRequest struct {
 	QueryText      string                 `protobuf:"bytes,4,opt,name=query_text,json=queryText,proto3" json:"query_text,omitempty"`
 	TopK           int32                  `protobuf:"varint,5,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
 	EmbeddingModel *string                `protobuf:"bytes,6,opt,name=embedding_model,json=embeddingModel,proto3,oneof" json:"embedding_model,omitempty"`
-	EfSearch       *int32                 `protobuf:"varint,7,opt,name=ef_search,json=efSearch,proto3,oneof" json:"ef_search,omitempty"` // string filter = 8;
+	EfSearch       *int32                 `protobuf:"varint,7,opt,name=ef_search,json=efSearch,proto3,oneof" json:"ef_search,omitempty"`
+	IncludeVector  *bool                  `protobuf:"varint,8,opt,name=include_vector,json=includeVector,proto3,oneof" json:"include_vector,omitempty"` // 是否在结果中包含向量数据，默认为 false 以提高性能
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1406,6 +1431,13 @@ func (x *EmbedAndSearchRequest) GetEfSearch() int32 {
 	return 0
 }
 
+func (x *EmbedAndSearchRequest) GetIncludeVector() bool {
+	if x != nil && x.IncludeVector != nil {
+		return *x.IncludeVector
+	}
+	return false
+}
+
 var File_scintirete_v1_scintirete_proto protoreflect.FileDescriptor
 
 const file_scintirete_v1_scintirete_proto_rawDesc = "" +
@@ -1422,10 +1454,13 @@ const file_scintirete_v1_scintirete_proto_rawDesc = "" +
 	"\x10TextWithMetadata\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x123\n" +
-	"\bmetadata\x18\x03 \x01(\v2\x17.google.protobuf.StructR\bmetadata\"]\n" +
-	"\x10SearchResultItem\x12-\n" +
-	"\x06vector\x18\x01 \x01(\v2\x15.scintirete.v1.VectorR\x06vector\x12\x1a\n" +
-	"\bdistance\x18\x02 \x01(\x02R\bdistance\"\xa9\x02\n" +
+	"\bmetadata\x18\x03 \x01(\v2\x17.google.protobuf.StructR\bmetadata\"\xb2\x01\n" +
+	"\x10SearchResultItem\x122\n" +
+	"\x06vector\x18\x01 \x01(\v2\x15.scintirete.v1.VectorH\x00R\x06vector\x88\x01\x01\x12\x1a\n" +
+	"\bdistance\x18\x02 \x01(\x02R\bdistance\x12\x0e\n" +
+	"\x02id\x18\x03 \x01(\tR\x02id\x123\n" +
+	"\bmetadata\x18\x04 \x01(\v2\x17.google.protobuf.StructR\bmetadataB\t\n" +
+	"\a_vector\"\xa9\x02\n" +
 	"\x0eCollectionInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tdimension\x18\x02 \x01(\x05R\tdimension\x12!\n" +
@@ -1481,16 +1516,18 @@ const file_scintirete_v1_scintirete_proto_rawDesc = "" +
 	"\x0fcollection_name\x18\x03 \x01(\tR\x0ecollectionName\x12\x10\n" +
 	"\x03ids\x18\x04 \x03(\tR\x03ids\"<\n" +
 	"\x15DeleteVectorsResponse\x12#\n" +
-	"\rdeleted_count\x18\x01 \x01(\x05R\fdeletedCount\"\xe6\x01\n" +
+	"\rdeleted_count\x18\x01 \x01(\x05R\fdeletedCount\"\xa5\x02\n" +
 	"\rSearchRequest\x12+\n" +
 	"\x04auth\x18\x01 \x01(\v2\x17.scintirete.v1.AuthInfoR\x04auth\x12\x17\n" +
 	"\adb_name\x18\x02 \x01(\tR\x06dbName\x12'\n" +
 	"\x0fcollection_name\x18\x03 \x01(\tR\x0ecollectionName\x12!\n" +
 	"\fquery_vector\x18\x04 \x03(\x02R\vqueryVector\x12\x13\n" +
 	"\x05top_k\x18\x05 \x01(\x05R\x04topK\x12 \n" +
-	"\tef_search\x18\x06 \x01(\x05H\x00R\befSearch\x88\x01\x01B\f\n" +
+	"\tef_search\x18\x06 \x01(\x05H\x00R\befSearch\x88\x01\x01\x12*\n" +
+	"\x0einclude_vector\x18\a \x01(\bH\x01R\rincludeVector\x88\x01\x01B\f\n" +
 	"\n" +
-	"_ef_search\"K\n" +
+	"_ef_searchB\x11\n" +
+	"\x0f_include_vector\"K\n" +
 	"\x0eSearchResponse\x129\n" +
 	"\aresults\x18\x01 \x03(\v2\x1f.scintirete.v1.SearchResultItemR\aresults\"\xff\x01\n" +
 	"\x15EmbedAndInsertRequest\x12+\n" +
@@ -1499,7 +1536,7 @@ const file_scintirete_v1_scintirete_proto_rawDesc = "" +
 	"\x0fcollection_name\x18\x03 \x01(\tR\x0ecollectionName\x125\n" +
 	"\x05texts\x18\x04 \x03(\v2\x1f.scintirete.v1.TextWithMetadataR\x05texts\x12,\n" +
 	"\x0fembedding_model\x18\x05 \x01(\tH\x00R\x0eembeddingModel\x88\x01\x01B\x12\n" +
-	"\x10_embedding_model\"\xac\x02\n" +
+	"\x10_embedding_model\"\xeb\x02\n" +
 	"\x15EmbedAndSearchRequest\x12+\n" +
 	"\x04auth\x18\x01 \x01(\v2\x17.scintirete.v1.AuthInfoR\x04auth\x12\x17\n" +
 	"\adb_name\x18\x02 \x01(\tR\x06dbName\x12'\n" +
@@ -1508,10 +1545,12 @@ const file_scintirete_v1_scintirete_proto_rawDesc = "" +
 	"query_text\x18\x04 \x01(\tR\tqueryText\x12\x13\n" +
 	"\x05top_k\x18\x05 \x01(\x05R\x04topK\x12,\n" +
 	"\x0fembedding_model\x18\x06 \x01(\tH\x00R\x0eembeddingModel\x88\x01\x01\x12 \n" +
-	"\tef_search\x18\a \x01(\x05H\x01R\befSearch\x88\x01\x01B\x12\n" +
+	"\tef_search\x18\a \x01(\x05H\x01R\befSearch\x88\x01\x01\x12*\n" +
+	"\x0einclude_vector\x18\b \x01(\bH\x02R\rincludeVector\x88\x01\x01B\x12\n" +
 	"\x10_embedding_modelB\f\n" +
 	"\n" +
-	"_ef_search*X\n" +
+	"_ef_searchB\x11\n" +
+	"\x0f_include_vector*X\n" +
 	"\x0eDistanceMetric\x12\x1f\n" +
 	"\x1bDISTANCE_METRIC_UNSPECIFIED\x10\x00\x12\x06\n" +
 	"\x02L2\x10\x01\x12\n" +
@@ -1577,55 +1616,56 @@ var file_scintirete_v1_scintirete_proto_depIdxs = []int32{
 	23, // 0: scintirete.v1.Vector.metadata:type_name -> google.protobuf.Struct
 	23, // 1: scintirete.v1.TextWithMetadata.metadata:type_name -> google.protobuf.Struct
 	2,  // 2: scintirete.v1.SearchResultItem.vector:type_name -> scintirete.v1.Vector
-	0,  // 3: scintirete.v1.CollectionInfo.metric_type:type_name -> scintirete.v1.DistanceMetric
-	1,  // 4: scintirete.v1.CollectionInfo.hnsw_config:type_name -> scintirete.v1.HnswConfig
-	6,  // 5: scintirete.v1.CreateDatabaseRequest.auth:type_name -> scintirete.v1.AuthInfo
-	6,  // 6: scintirete.v1.DropDatabaseRequest.auth:type_name -> scintirete.v1.AuthInfo
-	6,  // 7: scintirete.v1.ListDatabasesRequest.auth:type_name -> scintirete.v1.AuthInfo
-	6,  // 8: scintirete.v1.CreateCollectionRequest.auth:type_name -> scintirete.v1.AuthInfo
-	0,  // 9: scintirete.v1.CreateCollectionRequest.metric_type:type_name -> scintirete.v1.DistanceMetric
-	1,  // 10: scintirete.v1.CreateCollectionRequest.hnsw_config:type_name -> scintirete.v1.HnswConfig
-	6,  // 11: scintirete.v1.DropCollectionRequest.auth:type_name -> scintirete.v1.AuthInfo
-	6,  // 12: scintirete.v1.GetCollectionInfoRequest.auth:type_name -> scintirete.v1.AuthInfo
-	6,  // 13: scintirete.v1.ListCollectionsRequest.auth:type_name -> scintirete.v1.AuthInfo
-	5,  // 14: scintirete.v1.ListCollectionsResponse.collections:type_name -> scintirete.v1.CollectionInfo
-	6,  // 15: scintirete.v1.InsertVectorsRequest.auth:type_name -> scintirete.v1.AuthInfo
-	2,  // 16: scintirete.v1.InsertVectorsRequest.vectors:type_name -> scintirete.v1.Vector
-	6,  // 17: scintirete.v1.DeleteVectorsRequest.auth:type_name -> scintirete.v1.AuthInfo
-	6,  // 18: scintirete.v1.SearchRequest.auth:type_name -> scintirete.v1.AuthInfo
-	4,  // 19: scintirete.v1.SearchResponse.results:type_name -> scintirete.v1.SearchResultItem
-	6,  // 20: scintirete.v1.EmbedAndInsertRequest.auth:type_name -> scintirete.v1.AuthInfo
-	3,  // 21: scintirete.v1.EmbedAndInsertRequest.texts:type_name -> scintirete.v1.TextWithMetadata
-	6,  // 22: scintirete.v1.EmbedAndSearchRequest.auth:type_name -> scintirete.v1.AuthInfo
-	7,  // 23: scintirete.v1.ScintireteService.CreateDatabase:input_type -> scintirete.v1.CreateDatabaseRequest
-	8,  // 24: scintirete.v1.ScintireteService.DropDatabase:input_type -> scintirete.v1.DropDatabaseRequest
-	9,  // 25: scintirete.v1.ScintireteService.ListDatabases:input_type -> scintirete.v1.ListDatabasesRequest
-	11, // 26: scintirete.v1.ScintireteService.CreateCollection:input_type -> scintirete.v1.CreateCollectionRequest
-	12, // 27: scintirete.v1.ScintireteService.DropCollection:input_type -> scintirete.v1.DropCollectionRequest
-	13, // 28: scintirete.v1.ScintireteService.GetCollectionInfo:input_type -> scintirete.v1.GetCollectionInfoRequest
-	14, // 29: scintirete.v1.ScintireteService.ListCollections:input_type -> scintirete.v1.ListCollectionsRequest
-	16, // 30: scintirete.v1.ScintireteService.InsertVectors:input_type -> scintirete.v1.InsertVectorsRequest
-	17, // 31: scintirete.v1.ScintireteService.DeleteVectors:input_type -> scintirete.v1.DeleteVectorsRequest
-	19, // 32: scintirete.v1.ScintireteService.Search:input_type -> scintirete.v1.SearchRequest
-	21, // 33: scintirete.v1.ScintireteService.EmbedAndInsert:input_type -> scintirete.v1.EmbedAndInsertRequest
-	22, // 34: scintirete.v1.ScintireteService.EmbedAndSearch:input_type -> scintirete.v1.EmbedAndSearchRequest
-	24, // 35: scintirete.v1.ScintireteService.CreateDatabase:output_type -> google.protobuf.Empty
-	24, // 36: scintirete.v1.ScintireteService.DropDatabase:output_type -> google.protobuf.Empty
-	10, // 37: scintirete.v1.ScintireteService.ListDatabases:output_type -> scintirete.v1.ListDatabasesResponse
-	24, // 38: scintirete.v1.ScintireteService.CreateCollection:output_type -> google.protobuf.Empty
-	24, // 39: scintirete.v1.ScintireteService.DropCollection:output_type -> google.protobuf.Empty
-	5,  // 40: scintirete.v1.ScintireteService.GetCollectionInfo:output_type -> scintirete.v1.CollectionInfo
-	15, // 41: scintirete.v1.ScintireteService.ListCollections:output_type -> scintirete.v1.ListCollectionsResponse
-	24, // 42: scintirete.v1.ScintireteService.InsertVectors:output_type -> google.protobuf.Empty
-	18, // 43: scintirete.v1.ScintireteService.DeleteVectors:output_type -> scintirete.v1.DeleteVectorsResponse
-	20, // 44: scintirete.v1.ScintireteService.Search:output_type -> scintirete.v1.SearchResponse
-	24, // 45: scintirete.v1.ScintireteService.EmbedAndInsert:output_type -> google.protobuf.Empty
-	20, // 46: scintirete.v1.ScintireteService.EmbedAndSearch:output_type -> scintirete.v1.SearchResponse
-	35, // [35:47] is the sub-list for method output_type
-	23, // [23:35] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	23, // 3: scintirete.v1.SearchResultItem.metadata:type_name -> google.protobuf.Struct
+	0,  // 4: scintirete.v1.CollectionInfo.metric_type:type_name -> scintirete.v1.DistanceMetric
+	1,  // 5: scintirete.v1.CollectionInfo.hnsw_config:type_name -> scintirete.v1.HnswConfig
+	6,  // 6: scintirete.v1.CreateDatabaseRequest.auth:type_name -> scintirete.v1.AuthInfo
+	6,  // 7: scintirete.v1.DropDatabaseRequest.auth:type_name -> scintirete.v1.AuthInfo
+	6,  // 8: scintirete.v1.ListDatabasesRequest.auth:type_name -> scintirete.v1.AuthInfo
+	6,  // 9: scintirete.v1.CreateCollectionRequest.auth:type_name -> scintirete.v1.AuthInfo
+	0,  // 10: scintirete.v1.CreateCollectionRequest.metric_type:type_name -> scintirete.v1.DistanceMetric
+	1,  // 11: scintirete.v1.CreateCollectionRequest.hnsw_config:type_name -> scintirete.v1.HnswConfig
+	6,  // 12: scintirete.v1.DropCollectionRequest.auth:type_name -> scintirete.v1.AuthInfo
+	6,  // 13: scintirete.v1.GetCollectionInfoRequest.auth:type_name -> scintirete.v1.AuthInfo
+	6,  // 14: scintirete.v1.ListCollectionsRequest.auth:type_name -> scintirete.v1.AuthInfo
+	5,  // 15: scintirete.v1.ListCollectionsResponse.collections:type_name -> scintirete.v1.CollectionInfo
+	6,  // 16: scintirete.v1.InsertVectorsRequest.auth:type_name -> scintirete.v1.AuthInfo
+	2,  // 17: scintirete.v1.InsertVectorsRequest.vectors:type_name -> scintirete.v1.Vector
+	6,  // 18: scintirete.v1.DeleteVectorsRequest.auth:type_name -> scintirete.v1.AuthInfo
+	6,  // 19: scintirete.v1.SearchRequest.auth:type_name -> scintirete.v1.AuthInfo
+	4,  // 20: scintirete.v1.SearchResponse.results:type_name -> scintirete.v1.SearchResultItem
+	6,  // 21: scintirete.v1.EmbedAndInsertRequest.auth:type_name -> scintirete.v1.AuthInfo
+	3,  // 22: scintirete.v1.EmbedAndInsertRequest.texts:type_name -> scintirete.v1.TextWithMetadata
+	6,  // 23: scintirete.v1.EmbedAndSearchRequest.auth:type_name -> scintirete.v1.AuthInfo
+	7,  // 24: scintirete.v1.ScintireteService.CreateDatabase:input_type -> scintirete.v1.CreateDatabaseRequest
+	8,  // 25: scintirete.v1.ScintireteService.DropDatabase:input_type -> scintirete.v1.DropDatabaseRequest
+	9,  // 26: scintirete.v1.ScintireteService.ListDatabases:input_type -> scintirete.v1.ListDatabasesRequest
+	11, // 27: scintirete.v1.ScintireteService.CreateCollection:input_type -> scintirete.v1.CreateCollectionRequest
+	12, // 28: scintirete.v1.ScintireteService.DropCollection:input_type -> scintirete.v1.DropCollectionRequest
+	13, // 29: scintirete.v1.ScintireteService.GetCollectionInfo:input_type -> scintirete.v1.GetCollectionInfoRequest
+	14, // 30: scintirete.v1.ScintireteService.ListCollections:input_type -> scintirete.v1.ListCollectionsRequest
+	16, // 31: scintirete.v1.ScintireteService.InsertVectors:input_type -> scintirete.v1.InsertVectorsRequest
+	17, // 32: scintirete.v1.ScintireteService.DeleteVectors:input_type -> scintirete.v1.DeleteVectorsRequest
+	19, // 33: scintirete.v1.ScintireteService.Search:input_type -> scintirete.v1.SearchRequest
+	21, // 34: scintirete.v1.ScintireteService.EmbedAndInsert:input_type -> scintirete.v1.EmbedAndInsertRequest
+	22, // 35: scintirete.v1.ScintireteService.EmbedAndSearch:input_type -> scintirete.v1.EmbedAndSearchRequest
+	24, // 36: scintirete.v1.ScintireteService.CreateDatabase:output_type -> google.protobuf.Empty
+	24, // 37: scintirete.v1.ScintireteService.DropDatabase:output_type -> google.protobuf.Empty
+	10, // 38: scintirete.v1.ScintireteService.ListDatabases:output_type -> scintirete.v1.ListDatabasesResponse
+	24, // 39: scintirete.v1.ScintireteService.CreateCollection:output_type -> google.protobuf.Empty
+	24, // 40: scintirete.v1.ScintireteService.DropCollection:output_type -> google.protobuf.Empty
+	5,  // 41: scintirete.v1.ScintireteService.GetCollectionInfo:output_type -> scintirete.v1.CollectionInfo
+	15, // 42: scintirete.v1.ScintireteService.ListCollections:output_type -> scintirete.v1.ListCollectionsResponse
+	24, // 43: scintirete.v1.ScintireteService.InsertVectors:output_type -> google.protobuf.Empty
+	18, // 44: scintirete.v1.ScintireteService.DeleteVectors:output_type -> scintirete.v1.DeleteVectorsResponse
+	20, // 45: scintirete.v1.ScintireteService.Search:output_type -> scintirete.v1.SearchResponse
+	24, // 46: scintirete.v1.ScintireteService.EmbedAndInsert:output_type -> google.protobuf.Empty
+	20, // 47: scintirete.v1.ScintireteService.EmbedAndSearch:output_type -> scintirete.v1.SearchResponse
+	36, // [36:48] is the sub-list for method output_type
+	24, // [24:36] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_scintirete_v1_scintirete_proto_init() }
@@ -1633,6 +1673,7 @@ func file_scintirete_v1_scintirete_proto_init() {
 	if File_scintirete_v1_scintirete_proto != nil {
 		return
 	}
+	file_scintirete_v1_scintirete_proto_msgTypes[3].OneofWrappers = []any{}
 	file_scintirete_v1_scintirete_proto_msgTypes[10].OneofWrappers = []any{}
 	file_scintirete_v1_scintirete_proto_msgTypes[18].OneofWrappers = []any{}
 	file_scintirete_v1_scintirete_proto_msgTypes[20].OneofWrappers = []any{}
