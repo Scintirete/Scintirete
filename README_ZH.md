@@ -4,9 +4,11 @@
 [![Release](https://github.com/scintirete/scintirete/actions/workflows/release.yml/badge.svg)](https://github.com/scintirete/scintirete/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![](logo.jpeg)
+
 [English](README.md) | [文档](docs/)
 
-Scintirete 是一款基于 HNSW（分层导航小世界）算法实现的轻量级、面向生产的向量数据库。它的名字源于拉丁语 Scintilla（火花）和 Rete（网络），意为闪光的火花之网，寓意着在庞杂的数据网络中，用数据间最深层的相似性点亮那些微小却关键的"火花"。
+Scintirete 是一款基于 HNSW（分层导航小世界）算法实现的轻量级、面向生产的向量数据库。它的名字源于拉丁语 Scintilla（火花）和 Rete（网络），意为闪光的火花之网，寓意着在庞杂的数据网络中，用数据间最深层的相似性点亮那些微小却关键的火花。
 
 **核心理念：** 点亮数据之网，发现无限近邻。
 
