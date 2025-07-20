@@ -39,3 +39,13 @@ data/
 
 # Configuration files (use template instead)
 configs/scintirete.toml
+
+# Generated code
+gen/go/
+internal/flatbuffers/rdb/*.go
+internal/flatbuffers/aof/*.go
+
+# But keep the directories themselves for reference
+!gen/go/.gitkeep
+!internal/flatbuffers/rdb/.gitkeep
+!internal/flatbuffers/aof/.gitkeep

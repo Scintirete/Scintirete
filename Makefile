@@ -1,6 +1,6 @@
 # Scintirete Makefile
 
-.PHONY: all build test test-coverage test-integration benchmark clean proto-gen lint format vet help server cli deps docker docker-compose
+.PHONY: all build test test-coverage test-integration benchmark clean proto-gen flatbuffers-gen lint format vet help server cli deps docker docker-compose
 .DEFAULT_GOAL := help
 
 # 基本配置
@@ -9,16 +9,22 @@ GOFMT := gofmt
 GOLINT := golint
 GOVET := go vet
 PROTOC := protoc
+FLATC := flatc
 
 # 项目路径
 PROJECT_ROOT := $(shell pwd)
 API_DIR := api/proto
 GEN_DIR := gen/go
 BIN_DIR := bin
+FLATBUFFERS_SCHEMA_DIR := schemas/flatbuffers
+FLATBUFFERS_GEN_DIR := internal/flatbuffers
 
 # 生成的protobuf文件
 PROTO_FILES := $(shell find $(API_DIR) -name "*.proto")
 PROTO_GO_FILES := $(patsubst $(API_DIR)/%.proto,$(GEN_DIR)/%.pb.go,$(PROTO_FILES))
+
+# FlatBuffers schema 文件
+FLATBUFFERS_SCHEMA_FILES := $(shell find $(FLATBUFFERS_SCHEMA_DIR) -name "*.fbs" 2>/dev/null || echo "")
 
 # 二进制文件名
 SERVER_BINARY := scintirete-server
@@ -30,7 +36,7 @@ help: ## 显示帮助信息
 	@echo "可用命令:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-all: deps proto-gen build ## 完整构建流程
+all: deps proto-gen flatbuffers-gen build ## 完整构建流程
 
 deps: ## 安装依赖
 	@echo "Installing dependencies..."
@@ -57,37 +63,52 @@ proto-gen: ## 生成protobuf代码
 		--go-grpc_opt=paths=source_relative \
 		$(PROTO_FILES)
 
-build: proto-gen ## 构建所有二进制文件
+flatbuffers-gen: ## 生成FlatBuffers代码
+	@echo "Generating FlatBuffers code..."
+	@if [ -z "$(FLATBUFFERS_SCHEMA_FILES)" ]; then \
+		echo "No FlatBuffers schema files found in $(FLATBUFFERS_SCHEMA_DIR)"; \
+		exit 0; \
+	fi
+	@if ! command -v $(FLATC) > /dev/null; then \
+		echo "Error: flatc not found. Please install FlatBuffers compiler."; \
+		echo "  macOS: brew install flatbuffers"; \
+		echo "  Ubuntu: sudo apt-get install flatbuffers-compiler"; \
+		exit 1; \
+	fi
+	@chmod +x scripts/generate-flatbuffers.sh
+	@./scripts/generate-flatbuffers.sh
+
+build: proto-gen flatbuffers-gen ## 构建所有二进制文件
 	@echo "Building binaries..."
 	@mkdir -p $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/$(SERVER_BINARY) ./cmd/scintirete-server
 	$(GO) build -o $(BIN_DIR)/$(CLI_BINARY) ./cmd/scintirete-cli
 
-server: proto-gen ## 只构建服务端
+server: proto-gen flatbuffers-gen ## 只构建服务端
 	@echo "Building server..."
 	@mkdir -p $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/$(SERVER_BINARY) ./cmd/scintirete-server
 
-cli: proto-gen ## 只构建客户端
+cli: proto-gen flatbuffers-gen ## 只构建客户端
 	@echo "Building CLI..."
 	@mkdir -p $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/$(CLI_BINARY) ./cmd/scintirete-cli
 
-test: proto-gen ## 运行测试
+test: proto-gen flatbuffers-gen ## 运行测试
 	@echo "Running tests..."
 	$(GO) test -v -race -cover ./...
 
-test-coverage: proto-gen ## 运行测试并生成覆盖率报告
+test-coverage: proto-gen flatbuffers-gen ## 运行测试并生成覆盖率报告
 	@echo "Running tests with coverage..."
 	$(GO) test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-test-integration: proto-gen ## 运行集成测试
+test-integration: proto-gen flatbuffers-gen ## 运行集成测试
 	@echo "Running integration tests..."
 	$(GO) test -v -tags=integration ./test/integration/...
 
-benchmark: proto-gen ## 运行基准测试  
+benchmark: proto-gen flatbuffers-gen ## 运行基准测试  
 	@echo "Running benchmark tests..."
 	$(GO) test -bench=. -benchmem -timeout=300s ./test/benchmark/...
 	$(GO) test -bench=. -benchmem -timeout=300s ./internal/core/algorithm/...
@@ -116,6 +137,7 @@ clean: ## 清理构建文件
 	rm -rf $(BIN_DIR)
 	rm -rf $(GEN_DIR)
 	rm -f coverage.out coverage.html
+	rm -rf $(FLATBUFFERS_GEN_DIR)/rdb/*.go $(FLATBUFFERS_GEN_DIR)/aof/*.go
 
 install: build ## 安装到GOPATH/bin
 	@echo "Installing binaries..."
@@ -151,6 +173,10 @@ tools: ## 安装开发工具
 	$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 	$(GO) install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "To install FlatBuffers compiler (flatc):"
+	@echo "  macOS: brew install flatbuffers"
+	@echo "  Ubuntu: sudo apt-get install flatbuffers-compiler"
+	@echo "  Other: Download from https://github.com/google/flatbuffers/releases"
 
 .PHONY: run-server run-cli
 run-server: server ## 运行服务端 (开发模式)
