@@ -19,12 +19,11 @@ type Manager struct {
 	mu sync.RWMutex
 
 	// FlatBuffers-based persistence components
-	aofLogger     *aof.AOFLogger
-	rdbManager    *rdb.RDBManager
-	backupManager *rdb.BackupManager
-	cmdBuilder    *aof.CommandBuilder
-	cmdApplier    *CommandApplier
-	logger        core.Logger
+	aofLogger  *aof.AOFLogger
+	rdbManager *rdb.RDBManager
+	cmdBuilder *aof.CommandBuilder
+	cmdApplier *CommandApplier
+	logger     core.Logger
 
 	// Configuration
 	config Config
@@ -45,9 +44,8 @@ type Config struct {
 	AOFSyncStrategy string
 
 	// Background task intervals
-	RDBInterval     time.Duration // How often to create RDB snapshots
-	AOFRewriteSize  int64         // Rewrite AOF when it exceeds this size
-	BackupRetention int           // Number of backups to keep
+	RDBInterval    time.Duration // How often to create RDB snapshots
+	AOFRewriteSize int64         // Rewrite AOF when it exceeds this size
 
 	// Optional: Logger for persistence component
 	Logger core.Logger
@@ -88,22 +86,12 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 		return nil, utils.ErrPersistenceFailedWithCause("failed to create RDB manager", err)
 	}
 
-	// Create backup manager
-	backupDir := config.DataDir + "/backups"
-	backupManager, err := rdb.NewBackupManager(rdbManager, backupDir)
-	if err != nil {
-		return nil, utils.ErrPersistenceFailedWithCause("failed to create backup manager", err)
-	}
-
 	// Set default intervals if not specified
 	if config.RDBInterval == 0 {
 		config.RDBInterval = 5 * time.Minute // Default: save RDB every 5 minutes
 	}
 	if config.AOFRewriteSize == 0 {
 		config.AOFRewriteSize = 64 * 1024 * 1024 // Default: rewrite when AOF exceeds 64MB
-	}
-	if config.BackupRetention == 0 {
-		config.BackupRetention = 7 // Keep 7 backups by default
 	}
 
 	// Create default logger if not provided in config
@@ -122,13 +110,12 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 	}
 
 	manager := &Manager{
-		aofLogger:     aofLogger,
-		rdbManager:    rdbManager,
-		backupManager: backupManager,
-		cmdBuilder:    aof.NewCommandBuilder(),
-		config:        config,
-		stopTasks:     make(chan struct{}),
-		logger:        persistenceLogger,
+		aofLogger:  aofLogger,
+		rdbManager: rdbManager,
+		cmdBuilder: aof.NewCommandBuilder(),
+		config:     config,
+		stopTasks:  make(chan struct{}),
+		logger:     persistenceLogger,
 	}
 
 	// Set up command applier if database engine is provided
@@ -398,21 +385,6 @@ func (m *Manager) GetStats() Stats {
 	return stats
 }
 
-// CreateBackup creates a timestamped backup
-func (m *Manager) CreateBackup(ctx context.Context) (string, error) {
-	return m.backupManager.CreateBackup(ctx)
-}
-
-// ListBackups returns available backups
-func (m *Manager) ListBackups() ([]rdb.BackupInfo, error) {
-	return m.backupManager.ListBackups()
-}
-
-// RestoreFromBackup restores from a specific backup
-func (m *Manager) RestoreFromBackup(ctx context.Context, backupPath string) error {
-	return m.backupManager.RestoreFromBackup(ctx, backupPath)
-}
-
 // RewriteAOF triggers an AOF rewrite
 func (m *Manager) RewriteAOF(ctx context.Context, commands []types.AOFCommand) error {
 	m.mu.Lock()
@@ -554,12 +526,11 @@ func (m *Manager) runAOFRewriteTask(ctx context.Context) {
 func DefaultConfig(dataDir string) Config {
 	return Config{
 		DataDir:         dataDir,
-		RDBFilename:     "dump.rdb",
+		RDBFilename:     "vector.rdb",
 		AOFFilename:     "appendonly.aof",
 		AOFSyncStrategy: "everysec",
 		RDBInterval:     5 * time.Minute,
 		AOFRewriteSize:  64 * 1024 * 1024, // 64MB
-		BackupRetention: 7,
 	}
 }
 
@@ -590,10 +561,6 @@ func ValidateConfig(config Config) error {
 
 	if config.AOFRewriteSize <= 0 {
 		return utils.ErrConfig("AOF rewrite size must be positive")
-	}
-
-	if config.BackupRetention <= 0 {
-		return utils.ErrConfig("backup retention must be positive")
 	}
 
 	return nil

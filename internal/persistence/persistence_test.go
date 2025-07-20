@@ -32,8 +32,8 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("DataDir = %s, want %s", config.DataDir, dataDir)
 	}
 
-	if config.RDBFilename != "dump.rdb" {
-		t.Errorf("RDBFilename = %s, want dump.rdb", config.RDBFilename)
+	if config.RDBFilename != "vector.rdb" {
+		t.Errorf("RDBFilename = %s, want vector.rdb", config.RDBFilename)
 	}
 
 	if config.AOFFilename != "appendonly.aof" {
@@ -70,7 +70,6 @@ func TestValidateConfig(t *testing.T) {
 				AOFSyncStrategy: "everysec",
 				RDBInterval:     time.Minute,
 				AOFRewriteSize:  1024,
-				BackupRetention: 1,
 			},
 			wantErr: true,
 			errMsg:  "data directory cannot be empty",
@@ -84,7 +83,6 @@ func TestValidateConfig(t *testing.T) {
 				AOFSyncStrategy: "everysec",
 				RDBInterval:     time.Minute,
 				AOFRewriteSize:  1024,
-				BackupRetention: 1,
 			},
 			wantErr: true,
 			errMsg:  "RDB filename cannot be empty",
@@ -98,7 +96,6 @@ func TestValidateConfig(t *testing.T) {
 				AOFSyncStrategy: "invalid",
 				RDBInterval:     time.Minute,
 				AOFRewriteSize:  1024,
-				BackupRetention: 1,
 			},
 			wantErr: true,
 			errMsg:  "invalid AOF sync strategy",
@@ -112,7 +109,6 @@ func TestValidateConfig(t *testing.T) {
 				AOFSyncStrategy: "everysec",
 				RDBInterval:     -time.Minute,
 				AOFRewriteSize:  1024,
-				BackupRetention: 1,
 			},
 			wantErr: true,
 			errMsg:  "RDB interval must be positive",
@@ -126,24 +122,9 @@ func TestValidateConfig(t *testing.T) {
 				AOFSyncStrategy: "everysec",
 				RDBInterval:     time.Minute,
 				AOFRewriteSize:  -1024,
-				BackupRetention: 1,
 			},
 			wantErr: true,
 			errMsg:  "AOF rewrite size must be positive",
-		},
-		{
-			name: "negative backup retention",
-			config: Config{
-				DataDir:         "/tmp/test",
-				RDBFilename:     "dump.rdb",
-				AOFFilename:     "appendonly.aof",
-				AOFSyncStrategy: "everysec",
-				RDBInterval:     time.Minute,
-				AOFRewriteSize:  1024,
-				BackupRetention: -1,
-			},
-			wantErr: true,
-			errMsg:  "backup retention must be positive",
 		},
 	}
 
@@ -291,57 +272,6 @@ func TestManager_SaveSnapshot(t *testing.T) {
 
 	if stats.RDBInfo == nil || !stats.RDBInfo.Exists {
 		t.Error("RDB file should exist after SaveSnapshot")
-	}
-}
-
-func TestManager_BackupOperations(t *testing.T) {
-	tempDir := t.TempDir()
-	config := DefaultConfig(tempDir)
-
-	manager, err := NewManager(config)
-	if err != nil {
-		t.Fatalf("NewManager failed: %v", err)
-	}
-	defer manager.Stop(context.Background())
-
-	// First create a snapshot to backup
-	databases := map[string]rdb.DatabaseState{
-		"test_db": {
-			Name:        "test_db",
-			Collections: map[string]rdb.CollectionState{},
-			CreatedAt:   time.Now(),
-		},
-	}
-
-	err = manager.SaveSnapshot(context.Background(), databases)
-	if err != nil {
-		t.Fatalf("SaveSnapshot failed: %v", err)
-	}
-
-	// Create backup
-	backupPath, err := manager.CreateBackup(context.Background())
-	if err != nil {
-		t.Errorf("CreateBackup failed: %v", err)
-	}
-
-	if backupPath == "" {
-		t.Error("CreateBackup should return non-empty path")
-	}
-
-	// List backups
-	backups, err := manager.ListBackups()
-	if err != nil {
-		t.Errorf("ListBackups failed: %v", err)
-	}
-
-	if len(backups) != 1 {
-		t.Errorf("Backup count = %d, want 1", len(backups))
-	}
-
-	// Restore from backup
-	err = manager.RestoreFromBackup(context.Background(), backupPath)
-	if err != nil {
-		t.Errorf("RestoreFromBackup failed: %v", err)
 	}
 }
 

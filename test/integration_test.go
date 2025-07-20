@@ -28,7 +28,6 @@ func TestServerIntegration(t *testing.T) {
 			AOFSyncStrategy: "always",
 			RDBInterval:     time.Minute,
 			AOFRewriteSize:  1024 * 1024,
-			BackupRetention: 3,
 		},
 		EmbeddingConfig: embedding.Config{
 			BaseURL: "https://api.test.com/v1/embeddings", // Use fake URL for testing

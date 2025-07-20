@@ -65,7 +65,6 @@ func main() {
 			AOFSyncStrategy: cfg.Persistence.AOFSyncStrategy,
 			RDBInterval:     5 * time.Minute,
 			AOFRewriteSize:  64 * 1024 * 1024,
-			BackupRetention: 7,
 		},
 		EmbeddingConfig: embedding.Config{
 			BaseURL: cfg.Embedding.BaseURL,

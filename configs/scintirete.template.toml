@@ -32,7 +32,7 @@ enable_audit_log = true
 # 数据目录，用于存放 RDB 快照和 AOF 日志
 data_dir = "./data"
 # RDB 快照文件名
-rdb_filename = "dump.rdb"
+rdb_filename = "vector.rdb"
 # AOF (Append-Only File) 日志文件名
 aof_filename = "appendonly.aof"
 # AOF 同步策略:
@@ -45,8 +45,6 @@ aof_sync_strategy = "everysec"
 rdb_interval_minutes = 5
 # AOF 文件超过此大小（MB）时触发重写，减少文件体积
 aof_rewrite_size_mb = 64
-# 保留的备份文件数量，旧备份会被自动删除
-backup_retention = 7
 
 
 # [embedding] 表定义了与外部文本嵌入服务交互的配置
