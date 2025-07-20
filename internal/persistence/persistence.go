@@ -14,15 +14,17 @@ import (
 	"github.com/scintirete/scintirete/pkg/types"
 )
 
-// Manager implements the unified persistence interface
+// Manager implements the unified persistence interface using FlatBuffers
 type Manager struct {
-	mu            sync.RWMutex
+	mu sync.RWMutex
+
+	// FlatBuffers-based persistence components
 	aofLogger     *aof.AOFLogger
 	rdbManager    *rdb.RDBManager
 	backupManager *rdb.BackupManager
 	cmdBuilder    *aof.CommandBuilder
 	cmdApplier    *CommandApplier
-	logger        core.Logger // Add logger field
+	logger        core.Logger
 
 	// Configuration
 	config Config
@@ -70,16 +72,17 @@ func NewManager(config Config) (*Manager, error) {
 
 // NewManagerWithEngine creates a new persistence manager with database engine support
 func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, error) {
-	// Create AOF logger
 	aofPath := config.DataDir + "/" + config.AOFFilename
+	rdbPath := config.DataDir + "/" + config.RDBFilename
 	syncStrategy := aof.SyncStrategy(config.AOFSyncStrategy)
+
+	// Create AOF logger
 	aofLogger, err := aof.NewAOFLogger(aofPath, syncStrategy)
 	if err != nil {
 		return nil, utils.ErrPersistenceFailedWithCause("failed to create AOF logger", err)
 	}
 
 	// Create RDB manager
-	rdbPath := config.DataDir + "/" + config.RDBFilename
 	rdbManager, err := rdb.NewRDBManager(rdbPath)
 	if err != nil {
 		return nil, utils.ErrPersistenceFailedWithCause("failed to create RDB manager", err)
@@ -174,6 +177,7 @@ func (m *Manager) Recover(ctx context.Context) error {
 	// Step 1: Load RDB snapshot if it exists
 	m.logger.Debug(ctx, "Attempting to load RDB snapshot", map[string]interface{}{
 		"component": "persistence_recovery",
+		"format":    "FlatBuffers",
 	})
 
 	snapshot, err := m.rdbManager.Load(ctx)
@@ -216,6 +220,7 @@ func (m *Manager) Recover(ctx context.Context) error {
 	// Step 2: Replay AOF commands
 	m.logger.Debug(ctx, "Starting AOF replay", map[string]interface{}{
 		"component": "persistence_recovery",
+		"format":    "FlatBuffers",
 	})
 
 	err = m.aofLogger.Replay(ctx, func(command types.AOFCommand) error {
@@ -226,6 +231,7 @@ func (m *Manager) Recover(ctx context.Context) error {
 			m.logger.Debug(ctx, "AOF replay progress", map[string]interface{}{
 				"component":         "persistence_recovery",
 				"commands_replayed": commandCount,
+				"format":            "FlatBuffers",
 			})
 		}
 
@@ -238,6 +244,7 @@ func (m *Manager) Recover(ctx context.Context) error {
 					"database":    command.Database,
 					"collection":  command.Collection,
 					"command_num": commandCount,
+					"format":      "FlatBuffers",
 				})
 				return utils.ErrRecoveryFailed("failed to apply AOF command: " + err.Error())
 			}
@@ -249,6 +256,7 @@ func (m *Manager) Recover(ctx context.Context) error {
 				"database":    command.Database,
 				"collection":  command.Collection,
 				"command_num": commandCount,
+				"format":      "FlatBuffers",
 			})
 		}
 		return nil
@@ -306,6 +314,7 @@ func (m *Manager) SaveSnapshot(ctx context.Context, databases map[string]rdb.Dat
 	if err := m.aofLogger.Truncate(); err != nil {
 		m.logger.Error(ctx, "Failed to truncate AOF after RDB save", err, map[string]interface{}{
 			"component": "persistence_rdb_save",
+			"format":    "FlatBuffers",
 		})
 		return utils.ErrPersistenceFailedWithCause("failed to truncate AOF after RDB save", err)
 	}
@@ -314,6 +323,7 @@ func (m *Manager) SaveSnapshot(ctx context.Context, databases map[string]rdb.Dat
 	m.logger.Info(ctx, "RDB snapshot saved and AOF truncated successfully", map[string]interface{}{
 		"component":      "persistence_rdb_save",
 		"database_count": len(databases),
+		"format":         "FlatBuffers",
 	})
 	return nil
 }

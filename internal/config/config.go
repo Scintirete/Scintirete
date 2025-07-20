@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/scintirete/scintirete/internal/core"
+	"github.com/scintirete/scintirete/internal/persistence"
 )
 
 // Config represents the complete Scintirete configuration.
@@ -37,10 +40,13 @@ type LogConfig struct {
 
 // PersistenceConfig contains data persistence settings.
 type PersistenceConfig struct {
-	DataDir         string `toml:"data_dir"`
-	RDBFilename     string `toml:"rdb_filename"`
-	AOFFilename     string `toml:"aof_filename"`
-	AOFSyncStrategy string `toml:"aof_sync_strategy"`
+	DataDir            string `toml:"data_dir"`
+	RDBFilename        string `toml:"rdb_filename"`
+	AOFFilename        string `toml:"aof_filename"`
+	AOFSyncStrategy    string `toml:"aof_sync_strategy"`
+	RDBIntervalMinutes int    `toml:"rdb_interval_minutes"` // RDB snapshot interval in minutes
+	AOFRewriteSizeMB   int    `toml:"aof_rewrite_size_mb"`  // AOF rewrite threshold in MB
+	BackupRetention    int    `toml:"backup_retention"`     // Number of backups to keep
 }
 
 // EmbeddingConfig contains external embedding service settings.
@@ -86,10 +92,13 @@ func DefaultConfig() *Config {
 			EnableAuditLog: true,
 		},
 		Persistence: PersistenceConfig{
-			DataDir:         "./data",
-			RDBFilename:     "dump.rdb",
-			AOFFilename:     "appendonly.aof",
-			AOFSyncStrategy: "everysec",
+			DataDir:            "./data",
+			RDBFilename:        "dump.rdb",
+			AOFFilename:        "appendonly.aof",
+			AOFSyncStrategy:    "everysec",
+			RDBIntervalMinutes: 5,  // 5 minutes, consistent with persistence.DefaultConfig
+			AOFRewriteSizeMB:   64, // 64MB, consistent with persistence.DefaultConfig
+			BackupRetention:    7,  // 7 backups, consistent with persistence.DefaultConfig
 		},
 		Embedding: EmbeddingConfig{
 			BaseURL:  "https://api.openai.com/v1/embeddings",
@@ -198,6 +207,16 @@ func (c *Config) Validate() error {
 	}
 	if !validAOFStrategies[c.Persistence.AOFSyncStrategy] {
 		return fmt.Errorf("invalid AOF sync strategy: %s", c.Persistence.AOFSyncStrategy)
+	}
+
+	if c.Persistence.RDBIntervalMinutes < 0 {
+		return fmt.Errorf("RDB interval minutes must be non-negative: %d", c.Persistence.RDBIntervalMinutes)
+	}
+	if c.Persistence.AOFRewriteSizeMB <= 0 {
+		return fmt.Errorf("AOF rewrite size must be positive: %d", c.Persistence.AOFRewriteSizeMB)
+	}
+	if c.Persistence.BackupRetention <= 0 {
+		return fmt.Errorf("backup retention must be positive: %d", c.Persistence.BackupRetention)
 	}
 
 	// Validate embedding config
@@ -311,4 +330,18 @@ func (c *Config) Clone() *Config {
 	copy(clone.Server.Passwords, c.Server.Passwords)
 
 	return &clone
+}
+
+// ToPersistenceConfig converts the config file persistence settings to the format expected by the persistence module
+func (c *Config) ToPersistenceConfig(logger core.Logger) persistence.Config {
+	return persistence.Config{
+		DataDir:         c.Persistence.DataDir,
+		RDBFilename:     c.Persistence.RDBFilename,
+		AOFFilename:     c.Persistence.AOFFilename,
+		AOFSyncStrategy: c.Persistence.AOFSyncStrategy,
+		RDBInterval:     time.Duration(c.Persistence.RDBIntervalMinutes) * time.Minute,
+		AOFRewriteSize:  int64(c.Persistence.AOFRewriteSizeMB) * 1024 * 1024, // Convert MB to bytes
+		BackupRetention: c.Persistence.BackupRetention,
+		Logger:          logger,
+	}
 }

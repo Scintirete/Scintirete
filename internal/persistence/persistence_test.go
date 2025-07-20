@@ -435,7 +435,7 @@ func TestManager_RewriteAOF(t *testing.T) {
 		},
 		{
 			Command:    "INSERT_VECTORS",
-			Args:       map[string]interface{}{"vectors": []string{"v1"}},
+			Args:       map[string]interface{}{"vectors": []types.Vector{{ID: "v1", Elements: []float32{1.0, 2.0}}}},
 			Database:   "db1",
 			Collection: "coll1",
 		},

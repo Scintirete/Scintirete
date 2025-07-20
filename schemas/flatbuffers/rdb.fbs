@@ -1,0 +1,62 @@
+// RDB FlatBuffers Schema for Scintirete
+// Defines data structures for RDB snapshots
+
+namespace scintirete.rdb;
+
+enum DistanceMetric : byte {
+  UNSPECIFIED = 0,
+  L2 = 1,
+  COSINE = 2,
+  INNER_PRODUCT = 3
+}
+
+// Vector data structure
+table Vector {
+  id: string;
+  elements: [float];
+  metadata: string; // JSON-encoded metadata for flexibility
+}
+
+// HNSW parameters
+table HNSWParams {
+  m: int32;
+  ef_construction: int32;
+  ef_search: int32;
+  max_layers: int32;
+  seed: int64;
+}
+
+// Collection configuration
+table CollectionConfig {
+  name: string;
+  metric: DistanceMetric;
+  hnsw_params: HNSWParams;
+}
+
+// Collection snapshot
+table CollectionSnapshot {
+  name: string;
+  config: CollectionConfig;
+  vectors: [Vector];
+  vector_count: int64;
+  deleted_count: int64;
+  created_at: int64; // Unix timestamp
+  updated_at: int64; // Unix timestamp
+}
+
+// Database snapshot
+table DatabaseSnapshot {
+  name: string;
+  collections: [CollectionSnapshot];
+  created_at: int64; // Unix timestamp
+}
+
+// Root RDB snapshot
+table RDBSnapshot {
+  version: string;
+  timestamp: int64; // Unix timestamp
+  databases: [DatabaseSnapshot];
+  metadata: string; // JSON-encoded metadata for flexibility
+}
+
+root_type RDBSnapshot; 

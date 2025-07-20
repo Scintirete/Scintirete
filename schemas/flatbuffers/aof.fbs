@@ -1,0 +1,97 @@
+// AOF FlatBuffers Schema for Scintirete  
+// Defines data structures for AOF (Append-Only File) commands
+
+namespace scintirete.aof;
+
+enum DistanceMetric : byte {
+  UNSPECIFIED = 0,
+  L2 = 1,
+  COSINE = 2,
+  INNER_PRODUCT = 3
+}
+
+// Vector data structure
+table Vector {
+  id: string;
+  elements: [float];
+  metadata: string; // JSON-encoded metadata for flexibility
+}
+
+// HNSW parameters
+table HNSWParams {
+  m: int32;
+  ef_construction: int32;
+  ef_search: int32;
+  max_layers: int32;
+  seed: int64;
+}
+
+// Collection configuration
+table CollectionConfig {
+  name: string;
+  metric: DistanceMetric;
+  hnsw_params: HNSWParams;
+}
+
+// Command types
+enum CommandType : byte {
+  UNKNOWN = 0,
+  CREATE_DATABASE = 1,
+  DROP_DATABASE = 2,
+  CREATE_COLLECTION = 3,
+  DROP_COLLECTION = 4,
+  INSERT_VECTORS = 5,
+  DELETE_VECTORS = 6
+}
+
+// Command arguments union
+union CommandArgs {
+  CreateDatabaseArgs,
+  DropDatabaseArgs,
+  CreateCollectionArgs,
+  DropCollectionArgs,
+  InsertVectorsArgs,
+  DeleteVectorsArgs
+}
+
+// Create database arguments
+table CreateDatabaseArgs {
+  name: string;
+}
+
+// Drop database arguments  
+table DropDatabaseArgs {
+  name: string;
+}
+
+// Create collection arguments
+table CreateCollectionArgs {
+  name: string;
+  config: CollectionConfig;
+}
+
+// Drop collection arguments
+table DropCollectionArgs {
+  name: string;
+}
+
+// Insert vectors arguments
+table InsertVectorsArgs {
+  vectors: [Vector];
+}
+
+// Delete vectors arguments
+table DeleteVectorsArgs {
+  ids: [string];
+}
+
+// AOF Command
+table AOFCommand {
+  timestamp: int64; // Unix timestamp
+  command_type: CommandType;
+  args: CommandArgs;
+  database: string;
+  collection: string;
+}
+
+root_type AOFCommand; 
