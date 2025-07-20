@@ -155,6 +155,11 @@ tools: ## 安装开发工具
 .PHONY: run-server run-cli
 run-server: server ## 运行服务端 (开发模式)
 	@echo "Starting Scintirete server..."
+	@if [ ! -f configs/scintirete.toml ]; then \
+		echo "Warning: configs/scintirete.toml not found. Please copy from configs/scintirete.template.toml"; \
+		echo "cp configs/scintirete.template.toml configs/scintirete.toml"; \
+		exit 1; \
+	fi
 	./$(BIN_DIR)/$(SERVER_BINARY) --config configs/scintirete.toml
 
 run-cli: cli ## 运行CLI客户端示例

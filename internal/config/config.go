@@ -45,10 +45,10 @@ type PersistenceConfig struct {
 
 // EmbeddingConfig contains external embedding service settings.
 type EmbeddingConfig struct {
-	BaseURL      string `toml:"base_url"`
-	APIKeyEnvVar string `toml:"api_key_env_var"`
-	RPMLimit     int    `toml:"rpm_limit"`
-	TPMLimit     int    `toml:"tpm_limit"`
+	BaseURL  string `toml:"base_url"`
+	APIKey   string `toml:"api_key"`
+	RPMLimit int    `toml:"rpm_limit"`
+	TPMLimit int    `toml:"tpm_limit"`
 }
 
 // ObservabilityConfig contains metrics and monitoring settings.
@@ -92,10 +92,10 @@ func DefaultConfig() *Config {
 			AOFSyncStrategy: "everysec",
 		},
 		Embedding: EmbeddingConfig{
-			BaseURL:      "https://api.openai.com/v1/embeddings",
-			APIKeyEnvVar: "OPENAI_API_KEY",
-			RPMLimit:     3500,
-			TPMLimit:     90000,
+			BaseURL:  "https://api.openai.com/v1/embeddings",
+			APIKey:   "",
+			RPMLimit: 3500,
+			TPMLimit: 90000,
 		},
 		Observability: ObservabilityConfig{
 			MetricsEnabled: true,
@@ -247,12 +247,9 @@ func (c *Config) resolvePaths(configFilePath string) error {
 	return nil
 }
 
-// GetEmbeddingAPIKey retrieves the embedding API key from environment variable.
+// GetEmbeddingAPIKey retrieves the embedding API key.
 func (c *Config) GetEmbeddingAPIKey() string {
-	if c.Embedding.APIKeyEnvVar == "" {
-		return ""
-	}
-	return os.Getenv(c.Embedding.APIKeyEnvVar)
+	return c.Embedding.APIKey
 }
 
 // GetRDBPath returns the full path to the RDB file.

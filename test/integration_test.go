@@ -33,10 +33,10 @@ func TestFullStackIntegration(t *testing.T) {
 			BackupRetention: 3,
 		},
 		EmbeddingConfig: embedding.Config{
-			BaseURL:      "https://api.test.com/v1/embeddings", // Use fake URL for testing
-			APIKeyEnvVar: "OPENAI_API_KEY",
-			RPMLimit:     100,
-			TPMLimit:     10000,
+			BaseURL:  "https://api.test.com/v1/embeddings", // Use fake URL for testing
+			APIKey:   "",
+			RPMLimit: 100,
+			TPMLimit: 10000,
 		},
 		EnableMetrics:  false,
 		EnableAuditLog: false,

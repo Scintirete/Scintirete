@@ -76,12 +76,18 @@ To use the text embedding features, configure your OpenAI-compatible API:
 export OPENAI_API_KEY="your-api-key-here"
 ```
 
-Edit the configuration file `scintirete.toml`:
+First create the configuration file from template, then edit it:
+
+```bash
+cp configs/scintirete.template.toml configs/scintirete.toml
+```
+
+Edit the configuration file `configs/scintirete.toml`:
 
 ```toml
 [embedding]
 base_url = "https://api.openai.com/v1/embeddings"
-api_key_env_var = "OPENAI_API_KEY"
+api_key = "your-openai-api-key"
 ```
 
 #### 3. Basic Operations
@@ -168,7 +174,7 @@ aof_sync_strategy = "everysec"
 
 [embedding]
 base_url = "https://api.openai.com/v1/embeddings"
-api_key_env_var = "OPENAI_API_KEY"
+api_key = "your-openai-api-key"
 rpm_limit = 3500
 tpm_limit = 90000
 ```

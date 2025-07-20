@@ -18,11 +18,11 @@ func TestNewClient(t *testing.T) {
 	defer os.Unsetenv("TEST_API_KEY")
 
 	config := Config{
-		BaseURL:      "https://api.test.com/v1/embeddings",
-		APIKeyEnvVar: "TEST_API_KEY",
-		RPMLimit:     100,
-		TPMLimit:     10000,
-		Timeout:      5 * time.Second,
+		BaseURL:  "https://api.test.com/v1/embeddings",
+		APIKey:   "test-key",
+		RPMLimit: 100,
+		TPMLimit: 10000,
+		Timeout:  5 * time.Second,
 	}
 
 	client, err := NewClient(config)
@@ -45,10 +45,10 @@ func TestNewClient(t *testing.T) {
 
 func TestNewClient_MissingAPIKey(t *testing.T) {
 	config := Config{
-		BaseURL:      "https://api.test.com/v1/embeddings",
-		APIKeyEnvVar: "NON_EXISTENT_KEY",
-		RPMLimit:     100,
-		TPMLimit:     10000,
+		BaseURL:  "https://api.test.com/v1/embeddings",
+		APIKey:   "",
+		RPMLimit: 100,
+		TPMLimit: 10000,
 	}
 
 	client, err := NewClient(config)
@@ -143,11 +143,11 @@ func TestGetEmbeddings(t *testing.T) {
 	defer os.Unsetenv("TEST_API_KEY")
 
 	config := Config{
-		BaseURL:      server.URL,
-		APIKeyEnvVar: "TEST_API_KEY",
-		RPMLimit:     100,
-		TPMLimit:     10000,
-		Timeout:      5 * time.Second,
+		BaseURL:  server.URL,
+		APIKey:   "test-key",
+		RPMLimit: 100,
+		TPMLimit: 10000,
+		Timeout:  5 * time.Second,
 	}
 
 	client, err := NewClient(config)
@@ -194,15 +194,11 @@ func TestGetSingleEmbedding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Set environment variable for testing
-	os.Setenv("TEST_API_KEY", "test-key")
-	defer os.Unsetenv("TEST_API_KEY")
-
 	config := Config{
-		BaseURL:      server.URL,
-		APIKeyEnvVar: "TEST_API_KEY",
-		RPMLimit:     100,
-		TPMLimit:     10000,
+		BaseURL:  server.URL,
+		APIKey:   "test-key",
+		RPMLimit: 100,
+		TPMLimit: 10000,
 	}
 
 	client, err := NewClient(config)
@@ -248,15 +244,11 @@ func TestConvertTextsToVectors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Set environment variable for testing
-	os.Setenv("TEST_API_KEY", "test-key")
-	defer os.Unsetenv("TEST_API_KEY")
-
 	config := Config{
-		BaseURL:      server.URL,
-		APIKeyEnvVar: "TEST_API_KEY",
-		RPMLimit:     100,
-		TPMLimit:     10000,
+		BaseURL:  server.URL,
+		APIKey:   "test-key",
+		RPMLimit: 100,
+		TPMLimit: 10000,
 	}
 
 	client, err := NewClient(config)

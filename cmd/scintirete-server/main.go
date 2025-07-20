@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 	"github.com/scintirete/scintirete/internal/config"
@@ -117,6 +118,7 @@ func main() {
 
 		s := grpc.NewServer()
 		pb.RegisterScintireteServiceServer(s, grpcServer)
+		reflection.Register(s)
 
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Failed to serve gRPC: %v", err)
