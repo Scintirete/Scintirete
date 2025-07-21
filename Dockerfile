@@ -10,6 +10,7 @@ RUN apk add --no-cache \
     git \
     protobuf \
     protobuf-dev \
+    flatbuffers \
     make \
     gcc \
     musl-dev
@@ -32,6 +33,9 @@ RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
 
 # Generate protobuf code
 RUN make proto-gen
+
+# Generate flatbuffers code
+RUN make flatbuffers-gen
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build \
