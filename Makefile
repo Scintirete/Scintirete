@@ -13,7 +13,7 @@ FLATC := flatc
 
 # 项目路径
 PROJECT_ROOT := $(shell pwd)
-API_DIR := api/proto
+API_DIR := schemas/proto
 GEN_DIR := gen/go
 BIN_DIR := bin
 FLATBUFFERS_SCHEMA_DIR := schemas/flatbuffers
@@ -36,7 +36,7 @@ help: ## 显示帮助信息
 	@echo "可用命令:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-all: deps proto-gen flatbuffers-gen build ## 完整构建流程
+all: proto-gen flatbuffers-gen deps build ## 完整构建流程
 
 deps: ## 安装依赖
 	@echo "Installing dependencies..."
@@ -75,8 +75,31 @@ flatbuffers-gen: ## 生成FlatBuffers代码
 		echo "  Ubuntu: sudo apt-get install flatbuffers-compiler"; \
 		exit 1; \
 	fi
-	@chmod +x scripts/generate-flatbuffers.sh
-	@./scripts/generate-flatbuffers.sh
+	@echo "Cleaning existing generated FlatBuffers files..."
+	@rm -rf $(FLATBUFFERS_GEN_DIR)/rdb/*.go $(FLATBUFFERS_GEN_DIR)/aof/*.go
+	@echo "Creating FlatBuffers directories..."
+	@mkdir -p $(FLATBUFFERS_GEN_DIR)/rdb $(FLATBUFFERS_GEN_DIR)/aof
+	@if [ -f "$(FLATBUFFERS_SCHEMA_DIR)/rdb.fbs" ]; then \
+		echo "Generating RDB FlatBuffers code..."; \
+		$(FLATC) --go -o $(FLATBUFFERS_GEN_DIR)/rdb $(FLATBUFFERS_SCHEMA_DIR)/rdb.fbs; \
+		if [ -d "$(FLATBUFFERS_GEN_DIR)/rdb/scintirete" ]; then \
+			mv $(FLATBUFFERS_GEN_DIR)/rdb/scintirete/rdb/* $(FLATBUFFERS_GEN_DIR)/rdb/; \
+			rm -rf $(FLATBUFFERS_GEN_DIR)/rdb/scintirete; \
+		fi; \
+		echo "Generated RDB files in $(FLATBUFFERS_GEN_DIR)/rdb/:"; \
+		ls -la $(FLATBUFFERS_GEN_DIR)/rdb/*.go 2>/dev/null | head -5 || echo "No .go files found"; \
+	fi
+	@if [ -f "$(FLATBUFFERS_SCHEMA_DIR)/aof.fbs" ]; then \
+		echo "Generating AOF FlatBuffers code..."; \
+		$(FLATC) --go -o $(FLATBUFFERS_GEN_DIR)/aof $(FLATBUFFERS_SCHEMA_DIR)/aof.fbs; \
+		if [ -d "$(FLATBUFFERS_GEN_DIR)/aof/scintirete" ]; then \
+			mv $(FLATBUFFERS_GEN_DIR)/aof/scintirete/aof/* $(FLATBUFFERS_GEN_DIR)/aof/; \
+			rm -rf $(FLATBUFFERS_GEN_DIR)/aof/scintirete; \
+		fi; \
+		echo "Generated AOF files in $(FLATBUFFERS_GEN_DIR)/aof/:"; \
+		ls -la $(FLATBUFFERS_GEN_DIR)/aof/*.go 2>/dev/null | head -5 || echo "No .go files found"; \
+	fi
+	@echo "FlatBuffers code generation completed!"
 
 build: proto-gen flatbuffers-gen ## 构建所有二进制文件
 	@echo "Building binaries..."
