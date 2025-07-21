@@ -40,7 +40,7 @@ Scintirete 的目标是为中小型项目、边缘计算场景以及需要快速
 ```bash
 git clone https://github.com/scintirete/scintirete.git
 cd scintirete
-make build
+make all
 ```
 
 #### 选项 3：Docker
@@ -210,19 +210,15 @@ Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
    cd scintirete
    ```
 
-2. **安装依赖**
+2. **安装依赖并构建**
    ```bash
-   go mod download
+   brew install flatbuffers protobuf
+   make all
    ```
 
 3. **运行测试**
    ```bash
    make test
-   ```
-
-4. **构建**
-   ```bash
-   make build
    ```
 
 ### 贡献指南

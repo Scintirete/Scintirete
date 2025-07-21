@@ -40,7 +40,7 @@ Download the latest release from the [releases page](https://github.com/scintire
 ```bash
 git clone https://github.com/scintirete/scintirete.git
 cd scintirete
-make build
+make all
 ```
 
 #### Option 3: Docker
@@ -205,19 +205,15 @@ We welcome contributions to Scintirete! Here's how you can help:
    cd scintirete
    ```
 
-2. **Install Dependencies**
+2. **Install Dependencies and Build**
    ```bash
-   go mod download
+   brew install flatbuffers protobuf
+   make all
    ```
 
 3. **Run Tests**
    ```bash
    make test
-   ```
-
-4. **Build**
-   ```bash
-   make build
    ```
 
 ### Contribution Guidelines
