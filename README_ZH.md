@@ -106,20 +106,20 @@ tpm_limit = 90000
 
 # 插入文本并自动嵌入
 ./bin/scintirete-cli -p "your-password" text insert my_app documents \
-  --id "doc1" \
-  --text "Scintirete 是一个为生产环境优化的轻量级向量数据库。" \
-  --metadata '{"source":"documentation","type":"intro"}'
+  "doc1" \
+  "Scintirete 是一个为生产环境优化的轻量级向量数据库。" \
+  '{"source":"documentation","type":"intro"}'
 
 # 插入更多文档
 ./bin/scintirete-cli -p "your-password" text insert my_app documents \
-  --id "doc2" \
-  --text "HNSW 算法提供高效的近似最近邻搜索。" \
-  --metadata '{"source":"documentation","type":"technical"}'
+  "doc2" \
+  "HNSW 算法提供高效的近似最近邻搜索。" \
+  '{"source":"documentation","type":"technical"}'
 
 # 搜索相似内容
 ./bin/scintirete-cli -p "your-password" text search my_app documents \
-  --query "什么是 Scintirete？" \
-  --top-k 5
+  "什么是 Scintirete？" \
+  5
 
 # 获取集合信息
 ./bin/scintirete-cli -p "your-password" collection info my_app documents

@@ -12,6 +12,7 @@ import (
 	"github.com/scintirete/scintirete/internal/core/database"
 	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/observability/audit"
+	"github.com/scintirete/scintirete/internal/observability/logger"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/server"
 )
@@ -56,10 +57,14 @@ func NewServer(config server.ServerConfig) (*Server, error) {
 
 	// Create logger for server component
 	var serverLogger core.Logger
-	// For now, create a default logger - this could be passed from config later
-	// serverLogger = defaultLogger.WithFields(map[string]interface{}{
-	//     "component": "grpc_server",
-	// })
+	// Create a default logger for the server component
+	defaultLogger, err := logger.NewFromConfigString("info", "json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default logger: %w", err)
+	}
+	serverLogger = defaultLogger.WithFields(map[string]interface{}{
+		"component": "grpc_server",
+	})
 
 	// Create audit logger
 	var auditLogger *audit.Logger
@@ -148,4 +153,130 @@ func (s *Server) updateRequestStats() {
 	defer s.mu.Unlock()
 
 	s.requestCount++
+}
+
+// Save performs a synchronous RDB snapshot save
+func (s *Server) Save(ctx context.Context, req *pb.SaveRequest) (*pb.SaveResponse, error) {
+	defer s.updateRequestStats()
+
+	// Authenticate the request
+	if err := s.authenticate(req.Auth); err != nil {
+		return nil, err
+	}
+
+	// Log the operation
+	s.logAuditOperation(ctx, "SAVE", "", "", req.Auth, map[string]interface{}{
+		"operation": "sync_save",
+	})
+
+	startTime := time.Now()
+
+	// Get current database state
+	databases, err := s.engine.GetDatabaseState(ctx)
+	if err != nil {
+		s.logger.Error(ctx, "Failed to get database state for RDB save", err, map[string]interface{}{
+			"operation": "save_rdb",
+		})
+		return &pb.SaveResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to get database state: %v", err),
+		}, nil
+	}
+
+	// Perform synchronous save
+	err = s.persistence.SaveSnapshot(ctx, databases)
+	if err != nil {
+		s.logger.Error(ctx, "Failed to save RDB snapshot", err, map[string]interface{}{
+			"operation": "save_rdb",
+		})
+		return &pb.SaveResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to save RDB snapshot: %v", err),
+		}, nil
+	}
+
+	duration := time.Since(startTime)
+
+	// Get snapshot file size (if available)
+	var snapshotSize int64
+	// Note: We would need to expose RDB manager through persistence interface to get file info
+	// For now, we'll leave this as 0
+
+	s.logger.Info(ctx, "RDB snapshot saved successfully", map[string]interface{}{
+		"operation": "save_rdb",
+		"duration":  duration,
+		"size":      snapshotSize,
+	})
+
+	return &pb.SaveResponse{
+		Success:         true,
+		Message:         "RDB snapshot saved successfully",
+		SnapshotSize:    snapshotSize,
+		DurationSeconds: duration.Seconds(),
+	}, nil
+}
+
+// BgSave performs an asynchronous RDB snapshot save
+func (s *Server) BgSave(ctx context.Context, req *pb.BgSaveRequest) (*pb.BgSaveResponse, error) {
+	defer s.updateRequestStats()
+
+	// Authenticate the request
+	if err := s.authenticate(req.Auth); err != nil {
+		return nil, err
+	}
+
+	// Generate a job ID for tracking
+	jobID := fmt.Sprintf("bgsave_%d", time.Now().UnixNano())
+
+	// Log the operation
+	s.logAuditOperation(ctx, "BGSAVE", "", "", req.Auth, map[string]interface{}{
+		"operation": "async_save",
+		"job_id":    jobID,
+	})
+
+	// Start background save operation
+	go func() {
+		saveCtx := context.Background() // Use background context for long-running operation
+
+		s.logger.Info(saveCtx, "Starting background RDB save", map[string]interface{}{
+			"operation": "bgsave",
+			"job_id":    jobID,
+		})
+		startTime := time.Now()
+
+		// Get current database state
+		databases, err := s.engine.GetDatabaseState(saveCtx)
+		if err != nil {
+			s.logger.Error(saveCtx, "Background RDB save failed - could not get database state", err, map[string]interface{}{
+				"operation": "bgsave",
+				"job_id":    jobID,
+				"duration":  time.Since(startTime),
+			})
+			return
+		}
+
+		// Perform save
+		err = s.persistence.SaveSnapshot(saveCtx, databases)
+		duration := time.Since(startTime)
+
+		if err != nil {
+			s.logger.Error(saveCtx, "Background RDB save failed", err, map[string]interface{}{
+				"operation": "bgsave",
+				"job_id":    jobID,
+				"duration":  duration,
+			})
+		} else {
+			s.logger.Info(saveCtx, "Background RDB save completed successfully", map[string]interface{}{
+				"operation": "bgsave",
+				"job_id":    jobID,
+				"duration":  duration,
+			})
+		}
+	}()
+
+	return &pb.BgSaveResponse{
+		Success: true,
+		Message: "Background save started successfully",
+		JobId:   jobID,
+	}, nil
 }

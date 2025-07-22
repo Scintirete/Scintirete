@@ -2,9 +2,12 @@
 package grpc
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
 
+	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/server"
@@ -138,4 +141,152 @@ func TestServerAuthentication(t *testing.T) {
 	if err == nil {
 		t.Error("Empty password should fail authentication")
 	}
+}
+
+func TestServer_Save(t *testing.T) {
+	// Create test config
+	config := server.ServerConfig{
+		Passwords: []string{"test-password"},
+		PersistenceConfig: persistence.Config{
+			DataDir:     t.TempDir(),
+			RDBFilename: "test.rdb",
+			AOFFilename: "test.aof",
+		},
+		EmbeddingConfig: embedding.Config{
+			BaseURL: "http://localhost:8080",
+			APIKey:  "test-key",
+		},
+		EnableMetrics:  false,
+		EnableAuditLog: false,
+	}
+
+	// Create server
+	srv, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Test valid save request
+	req := &pb.SaveRequest{
+		Auth: &pb.AuthInfo{
+			Password: "test-password",
+		},
+	}
+
+	resp, err := srv.Save(context.Background(), req)
+	if err != nil {
+		t.Errorf("Save failed: %v", err)
+	}
+
+	if resp == nil {
+		t.Fatal("Response is nil")
+	}
+
+	if !resp.Success {
+		t.Errorf("Save should succeed, got: %s", resp.Message)
+	}
+
+	if resp.DurationSeconds < 0 {
+		t.Error("Duration should be non-negative")
+	}
+
+	// Test invalid authentication
+	invalidReq := &pb.SaveRequest{
+		Auth: &pb.AuthInfo{
+			Password: "invalid-password",
+		},
+	}
+
+	_, err = srv.Save(context.Background(), invalidReq)
+	if err == nil {
+		t.Error("Save with invalid password should fail")
+	}
+
+	// Test missing authentication
+	nilAuthReq := &pb.SaveRequest{
+		Auth: nil,
+	}
+
+	_, err = srv.Save(context.Background(), nilAuthReq)
+	if err == nil {
+		t.Error("Save with nil auth should fail")
+	}
+}
+
+func TestServer_BgSave(t *testing.T) {
+	// Create test config
+	config := server.ServerConfig{
+		Passwords: []string{"test-password"},
+		PersistenceConfig: persistence.Config{
+			DataDir:     t.TempDir(),
+			RDBFilename: "test.rdb",
+			AOFFilename: "test.aof",
+		},
+		EmbeddingConfig: embedding.Config{
+			BaseURL: "http://localhost:8080",
+			APIKey:  "test-key",
+		},
+		EnableMetrics:  false,
+		EnableAuditLog: false,
+	}
+
+	// Create server
+	srv, err := NewServer(config)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Test valid bgsave request
+	req := &pb.BgSaveRequest{
+		Auth: &pb.AuthInfo{
+			Password: "test-password",
+		},
+	}
+
+	resp, err := srv.BgSave(context.Background(), req)
+	if err != nil {
+		t.Errorf("BgSave failed: %v", err)
+	}
+
+	if resp == nil {
+		t.Fatal("Response is nil")
+	}
+
+	if !resp.Success {
+		t.Errorf("BgSave should succeed, got: %s", resp.Message)
+	}
+
+	if resp.JobId == "" {
+		t.Error("Job ID should not be empty")
+	}
+
+	// Verify job ID format
+	if !strings.HasPrefix(resp.JobId, "bgsave_") {
+		t.Errorf("Job ID should start with 'bgsave_', got: %s", resp.JobId)
+	}
+
+	// Test invalid authentication
+	invalidReq := &pb.BgSaveRequest{
+		Auth: &pb.AuthInfo{
+			Password: "invalid-password",
+		},
+	}
+
+	_, err = srv.BgSave(context.Background(), invalidReq)
+	if err == nil {
+		t.Error("BgSave with invalid password should fail")
+	}
+
+	// Test missing authentication
+	nilAuthReq := &pb.BgSaveRequest{
+		Auth: nil,
+	}
+
+	_, err = srv.BgSave(context.Background(), nilAuthReq)
+	if err == nil {
+		t.Error("BgSave with nil auth should fail")
+	}
+
+	// Give background save some time to complete
+	time.Sleep(100 * time.Millisecond)
 }

@@ -10,7 +10,23 @@ enum DistanceMetric : byte {
   INNER_PRODUCT = 3
 }
 
-// Vector data structure
+// HNSW Node connections at a specific layer
+table LayerConnections {
+  layer: int32;
+  connected_node_ids: [string];
+}
+
+// HNSW Node with complete graph information
+table HNSWNode {
+  id: string;
+  elements: [float];
+  metadata: string; // JSON-encoded metadata for flexibility
+  deleted: bool;
+  layer_connections: [LayerConnections]; // Connections at each layer
+  max_layer: int32; // The highest layer this node belongs to
+}
+
+// Vector data structure (legacy, for backwards compatibility)
 table Vector {
   id: string;
   elements: [float];
@@ -26,6 +42,14 @@ table HNSWParams {
   seed: int64;
 }
 
+// HNSW Graph state
+table HNSWGraph {
+  nodes: [HNSWNode];
+  entrypoint_id: string;
+  max_layer: int32;
+  size: int32;
+}
+
 // Collection configuration
 table CollectionConfig {
   name: string;
@@ -33,11 +57,12 @@ table CollectionConfig {
   hnsw_params: HNSWParams;
 }
 
-// Collection snapshot
+// Collection snapshot with HNSW graph
 table CollectionSnapshot {
   name: string;
   config: CollectionConfig;
-  vectors: [Vector];
+  vectors: [Vector]; // Legacy field for backwards compatibility
+  hnsw_graph: HNSWGraph; // New field for HNSW graph state
   vector_count: int64;
   deleted_count: int64;
   created_at: int64; // Unix timestamp

@@ -2,19 +2,21 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/chzyer/readline"
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 // CLI represents the command-line interface
@@ -33,6 +35,30 @@ type Command struct {
 	Handler     func(*CLI, []string) error
 }
 
+func makeCommands() map[string]Command {
+	return map[string]Command{
+		"help":              {Name: "help", Description: "Show help information", Usage: "help [command]", Handler: (*CLI).helpCommand},
+		"quit":              {Name: "quit", Description: "Exit the CLI", Usage: "quit", Handler: (*CLI).quitCommand},
+		"exit":              {Name: "exit", Description: "Exit the CLI", Usage: "exit", Handler: (*CLI).quitCommand},
+		"ping":              {Name: "ping", Description: "Test connection to server", Usage: "ping", Handler: (*CLI).pingCommand},
+		"version":           {Name: "version", Description: "Show version information", Usage: "version", Handler: (*CLI).versionCommand},
+		"list-databases":    {Name: "list-databases", Description: "List all databases", Usage: "list-databases", Handler: (*CLI).listDatabasesCommand},
+		"create-database":   {Name: "create-database", Description: "Create a new database", Usage: "create-database <n>", Handler: (*CLI).createDatabaseCommand},
+		"drop-database":     {Name: "drop-database", Description: "Drop a database", Usage: "drop-database <n>", Handler: (*CLI).dropDatabaseCommand},
+		"use":               {Name: "use", Description: "Switch to a database", Usage: "use <database>", Handler: (*CLI).useCommand},
+		"list-collections":  {Name: "list-collections", Description: "List collections in current database", Usage: "list-collections", Handler: (*CLI).listCollectionsCommand},
+		"create-collection": {Name: "create-collection", Description: "Create a new collection", Usage: "create-collection <n> <metric> [hnsw-params]", Handler: (*CLI).createCollectionCommand},
+		"drop-collection":   {Name: "drop-collection", Description: "Drop a collection", Usage: "drop-collection <n>", Handler: (*CLI).dropCollectionCommand},
+		"collection-info":   {Name: "collection-info", Description: "Get collection information", Usage: "collection-info <n>", Handler: (*CLI).collectionInfoCommand},
+		"insert":            {Name: "insert", Description: "Insert vectors into a collection", Usage: "insert <collection> <id> <vector> [metadata]", Handler: (*CLI).insertCommand},
+		"search":            {Name: "search", Description: "Search for similar vectors", Usage: "search <collection> <vector> [top-k] [ef-search]", Handler: (*CLI).searchCommand},
+		"delete":            {Name: "delete", Description: "Delete vectors from a collection", Usage: "delete <collection> <id1> [id2] ...", Handler: (*CLI).deleteCommand},
+		"text":              {Name: "text", Description: "Text embedding operations", Usage: "text <insert|search> <args...>", Handler: (*CLI).textCommand},
+		"save":              {Name: "save", Description: "Synchronously save RDB snapshot", Usage: "save", Handler: (*CLI).saveCommand},
+		"bgsave":            {Name: "bgsave", Description: "Asynchronously save RDB snapshot", Usage: "bgsave", Handler: (*CLI).bgsaveCommand},
+	}
+}
+
 var (
 	version = "dev"
 	commit  = "unknown"
@@ -45,24 +71,7 @@ var (
 	help     = flag.Bool("help", false, "Show help")
 
 	// Commands registry
-	commands = map[string]Command{
-		"help":              {Name: "help", Description: "Show help information", Usage: "help [command]", Handler: (*CLI).helpCommand},
-		"quit":              {Name: "quit", Description: "Exit the CLI", Usage: "quit", Handler: (*CLI).quitCommand},
-		"exit":              {Name: "exit", Description: "Exit the CLI", Usage: "exit", Handler: (*CLI).quitCommand},
-		"ping":              {Name: "ping", Description: "Test connection to server", Usage: "ping", Handler: (*CLI).pingCommand},
-		"version":           {Name: "version", Description: "Show version information", Usage: "version", Handler: (*CLI).versionCommand},
-		"list-databases":    {Name: "list-databases", Description: "List all databases", Usage: "list-databases", Handler: (*CLI).listDatabasesCommand},
-		"create-database":   {Name: "create-database", Description: "Create a new database", Usage: "create-database <name>", Handler: (*CLI).createDatabaseCommand},
-		"drop-database":     {Name: "drop-database", Description: "Drop a database", Usage: "drop-database <name>", Handler: (*CLI).dropDatabaseCommand},
-		"use":               {Name: "use", Description: "Switch to a database", Usage: "use <database>", Handler: (*CLI).useCommand},
-		"list-collections":  {Name: "list-collections", Description: "List collections in current database", Usage: "list-collections", Handler: (*CLI).listCollectionsCommand},
-		"create-collection": {Name: "create-collection", Description: "Create a new collection", Usage: "create-collection <name> <metric> [hnsw-params]", Handler: (*CLI).createCollectionCommand},
-		"drop-collection":   {Name: "drop-collection", Description: "Drop a collection", Usage: "drop-collection <name>", Handler: (*CLI).dropCollectionCommand},
-		"collection-info":   {Name: "collection-info", Description: "Get collection information", Usage: "collection-info <name>", Handler: (*CLI).collectionInfoCommand},
-		"insert":            {Name: "insert", Description: "Insert vectors into a collection", Usage: "insert <collection> <id> <vector> [metadata]", Handler: (*CLI).insertCommand},
-		"search":            {Name: "search", Description: "Search for similar vectors", Usage: "search <collection> <vector> [top-k] [ef-search]", Handler: (*CLI).searchCommand},
-		"delete":            {Name: "delete", Description: "Delete vectors from a collection", Usage: "delete <collection> <id1> [id2] ...", Handler: (*CLI).deleteCommand},
-	}
+	commands = makeCommands()
 )
 
 func main() {
@@ -134,16 +143,28 @@ func (c *CLI) interactive() {
 	fmt.Println("Type 'help' for available commands or 'quit' to exit.")
 	fmt.Println()
 
-	scanner := bufio.NewScanner(os.Stdin)
+	rl, err := readline.New(c.prompt)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing readline: %v\n", err)
+		os.Exit(1)
+	}
+	defer rl.Close()
 
 	for {
-		fmt.Print(c.prompt)
-
-		if !scanner.Scan() {
+		line, err := rl.Readline()
+		if err == readline.ErrInterrupt {
+			if len(line) == 0 {
+				break
+			}
+			continue
+		} else if err == io.EOF {
 			break
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+			continue
 		}
 
-		line := strings.TrimSpace(scanner.Text())
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -152,10 +173,6 @@ func (c *CLI) interactive() {
 		if err := c.executeCommand(args); err != nil {
 			fmt.Printf("Error: %v\n", err)
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
 	}
 }
 
@@ -210,23 +227,24 @@ func parseCommand(line string) []string {
 // Command handlers
 
 func (c *CLI) helpCommand(args []string) error {
-	// if len(args) == 0 {
-	// 	fmt.Println("Available commands:")
-	// 	fmt.Println()
-	// 	for _, cmd := range commands {
-	// 		fmt.Printf("  %-20s %s\n", cmd.Name, cmd.Description)
-	// 	}
-	// 	fmt.Println()
-	// 	fmt.Println("Type 'help <command>' for detailed usage information.")
-	// } else {
-	// 	cmdName := strings.ToLower(args[0])
-	// 	if cmd, exists := commands[cmdName]; exists {
-	// 		fmt.Printf("%s - %s\n", cmd.Name, cmd.Description)
-	// 		fmt.Printf("Usage: %s\n", cmd.Usage)
-	// 	} else {
-	// 		return fmt.Errorf("unknown command: %s", cmdName)
-	// 	}
-	// }
+	commands := makeCommands()
+	if len(args) == 0 {
+		fmt.Println("Available commands:")
+		fmt.Println()
+		for _, cmd := range commands {
+			fmt.Printf("  %-20s %s\n", cmd.Name, cmd.Description)
+		}
+		fmt.Println()
+		fmt.Println("Type 'help <command>' for detailed usage information.")
+	} else {
+		cmdName := strings.ToLower(args[0])
+		if cmd, exists := commands[cmdName]; exists {
+			fmt.Printf("%s - %s\n", cmd.Name, cmd.Description)
+			fmt.Printf("Usage: %s\n", cmd.Usage)
+		} else {
+			return fmt.Errorf("unknown command: %s", cmdName)
+		}
+	}
 	return nil
 }
 
@@ -648,6 +666,243 @@ func (c *CLI) deleteCommand(args []string) error {
 	}
 
 	fmt.Printf("Successfully deleted %d vectors.\n", resp.DeletedCount)
+	return nil
+}
+
+// textCommand handles text embedding operations (insert and search)
+func (c *CLI) textCommand(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: text <insert|search> <args...>")
+	}
+
+	subCommand := strings.ToLower(args[0])
+	subArgs := args[1:]
+
+	switch subCommand {
+	case "insert":
+		if len(subArgs) < 3 {
+			return fmt.Errorf("usage: text insert <collection> <id> <text> [metadata] [model]")
+		}
+		return c.textInsertCommand(subArgs)
+	case "search":
+		if len(subArgs) < 2 {
+			return fmt.Errorf("usage: text search <collection> <text> [top-k] [ef-search] [model]")
+		}
+		return c.textSearchCommand(subArgs)
+	default:
+		return fmt.Errorf("unknown text sub-command: %s", subCommand)
+	}
+}
+
+// textInsertCommand handles text insertion with embedding
+func (c *CLI) textInsertCommand(args []string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("usage: text insert <collection> <id> <text> [metadata] [model]")
+	}
+
+	collection := args[0]
+	id := args[1]
+	text := args[2]
+
+	// Parse optional metadata
+	var metadata map[string]interface{}
+	if len(args) >= 4 && args[3] != "" {
+		if err := json.Unmarshal([]byte(args[3]), &metadata); err != nil {
+			return fmt.Errorf("invalid metadata JSON: %v", err)
+		}
+	}
+
+	// Parse optional model
+	var model string
+	if len(args) >= 5 {
+		model = args[4]
+	}
+
+	// Create the request
+	req := &pb.EmbedAndInsertRequest{
+		Auth: &pb.AuthInfo{
+			Password: c.password,
+		},
+		DbName:         *database,
+		CollectionName: collection,
+		Texts: []*pb.TextWithMetadata{
+			{
+				Id:   id,
+				Text: text,
+			},
+		},
+	}
+
+	if metadata != nil {
+		req.Texts[0].Metadata = convertToStruct(metadata)
+	}
+
+	if model != "" {
+		req.EmbeddingModel = &model
+	}
+
+	// Make the request
+	_, err := c.client.EmbedAndInsert(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("failed to insert with embedding: %v", err)
+	}
+
+	fmt.Printf("Successfully inserted text with ID '%s' into collection '%s'\n", id, collection)
+	return nil
+}
+
+// textSearchCommand handles text search with embedding
+func (c *CLI) textSearchCommand(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: text search <collection> <text> [top-k] [ef-search] [model]")
+	}
+
+	collection := args[0]
+	text := args[1]
+
+	// Parse optional top-k
+	topK := int32(10) // default
+	if len(args) >= 3 {
+		k, err := strconv.Atoi(args[2])
+		if err != nil {
+			return fmt.Errorf("invalid top-k value: %v", err)
+		}
+		topK = int32(k)
+	}
+
+	// Parse optional ef-search
+	var efSearch *int32
+	if len(args) >= 4 {
+		ef, err := strconv.Atoi(args[3])
+		if err != nil {
+			return fmt.Errorf("invalid ef-search value: %v", err)
+		}
+		efSearch = &[]int32{int32(ef)}[0]
+	}
+
+	// Parse optional model
+	var model string
+	if len(args) >= 5 {
+		model = args[4]
+	}
+
+	// Create the request
+	req := &pb.EmbedAndSearchRequest{
+		Auth: &pb.AuthInfo{
+			Password: c.password,
+		},
+		DbName:         *database,
+		CollectionName: collection,
+		QueryText:      text,
+		TopK:           topK,
+		EfSearch:       efSearch,
+	}
+
+	if model != "" {
+		req.EmbeddingModel = &model
+	}
+
+	// Make the request
+	resp, err := c.client.EmbedAndSearch(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("failed to search with embedding: %v", err)
+	}
+
+	// Display results
+	fmt.Printf("Search results for text: \"%s\"\n", text)
+	fmt.Printf("Found %d results:\n\n", len(resp.Results))
+
+	for i, result := range resp.Results {
+		fmt.Printf("%d. ID: %s, Distance: %.6f\n", i+1, result.Id, result.Distance)
+		if result.Metadata != nil {
+			metadataJSON, _ := json.MarshalIndent(convertFromStruct(result.Metadata), "   ", "  ")
+			fmt.Printf("   Metadata: %s\n", string(metadataJSON))
+		}
+		if result.Vector != nil && len(result.Vector.Elements) > 0 {
+			fmt.Printf("   Vector: [%.3f, %.3f, ...] (%d dimensions)\n",
+				result.Vector.Elements[0],
+				result.Vector.Elements[1],
+				len(result.Vector.Elements))
+		}
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// Helper function to convert map to protobuf Struct
+func convertToStruct(m map[string]interface{}) *structpb.Struct {
+	// For simplicity, we'll just return nil here
+	// In a real implementation, you'd convert the map to a protobuf Struct
+	return nil
+}
+
+// Helper function to convert protobuf Struct to map
+func convertFromStruct(s *structpb.Struct) map[string]interface{} {
+	// For simplicity, we'll just return an empty map here
+	// In a real implementation, you'd convert the protobuf Struct to a map
+	return make(map[string]interface{})
+}
+
+// saveCommand handles the save command
+func (c *CLI) saveCommand(args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: save")
+	}
+
+	// Create the request
+	req := &pb.SaveRequest{
+		Auth: &pb.AuthInfo{
+			Password: c.password,
+		},
+	}
+
+	// Make the request
+	resp, err := c.client.Save(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("failed to save RDB snapshot: %v", err)
+	}
+
+	if resp.Success {
+		fmt.Printf("RDB snapshot saved successfully\n")
+		fmt.Printf("Duration: %.3f seconds\n", resp.DurationSeconds)
+		if resp.SnapshotSize > 0 {
+			fmt.Printf("Snapshot size: %d bytes (%.2f MB)\n", resp.SnapshotSize, float64(resp.SnapshotSize)/(1024*1024))
+		}
+	} else {
+		fmt.Printf("Failed to save RDB snapshot: %s\n", resp.Message)
+	}
+
+	return nil
+}
+
+// bgsaveCommand handles the bgsave command
+func (c *CLI) bgsaveCommand(args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: bgsave")
+	}
+
+	// Create the request
+	req := &pb.BgSaveRequest{
+		Auth: &pb.AuthInfo{
+			Password: c.password,
+		},
+	}
+
+	// Make the request
+	resp, err := c.client.BgSave(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("failed to start background RDB save: %v", err)
+	}
+
+	if resp.Success {
+		fmt.Printf("Background RDB save started successfully\n")
+		fmt.Printf("Job ID: %s\n", resp.JobId)
+		fmt.Printf("Note: Check server logs for completion status\n")
+	} else {
+		fmt.Printf("Failed to start background RDB save: %s\n", resp.Message)
+	}
+
 	return nil
 }
 

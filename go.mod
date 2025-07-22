@@ -3,11 +3,12 @@ module github.com/scintirete/scintirete
 go 1.24.5
 
 require (
-	github.com/BurntSushi/toml v1.5.0
+	github.com/BurntSushi/toml v1.4.0
+	github.com/chzyer/readline v1.5.1
 	github.com/gin-gonic/gin v1.10.0
-	github.com/google/flatbuffers v25.2.10+incompatible
+	github.com/google/flatbuffers v24.3.25+incompatible
 	github.com/stretchr/testify v1.9.0
-	google.golang.org/grpc v1.73.0
+	google.golang.org/grpc v1.68.1
 	google.golang.org/protobuf v1.36.6
 )
 

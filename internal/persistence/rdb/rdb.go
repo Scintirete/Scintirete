@@ -36,10 +36,35 @@ type CollectionSnapshot struct {
 	Name         string                 `json:"name"`
 	Config       types.CollectionConfig `json:"config"`
 	Vectors      []types.Vector         `json:"vectors"`
+	HNSWGraph    *HNSWGraphSnapshot     `json:"hnsw_graph,omitempty"` // New field for HNSW graph
 	VectorCount  int64                  `json:"vector_count"`
 	DeletedCount int64                  `json:"deleted_count"`
 	CreatedAt    time.Time              `json:"created_at"`
 	UpdatedAt    time.Time              `json:"updated_at"`
+}
+
+// HNSWGraphSnapshot represents a snapshot of the HNSW graph state
+type HNSWGraphSnapshot struct {
+	Nodes        []HNSWNodeSnapshot `json:"nodes"`
+	EntryPointID string             `json:"entrypoint_id"`
+	MaxLayer     int                `json:"max_layer"`
+	Size         int                `json:"size"`
+}
+
+// HNSWNodeSnapshot represents a snapshot of an HNSW node
+type HNSWNodeSnapshot struct {
+	ID               string                     `json:"id"`
+	Elements         []float32                  `json:"elements"`
+	Metadata         map[string]interface{}     `json:"metadata"`
+	Deleted          bool                       `json:"deleted"`
+	LayerConnections []LayerConnectionsSnapshot `json:"layer_connections"`
+	MaxLayer         int                        `json:"max_layer"`
+}
+
+// LayerConnectionsSnapshot represents connections at a specific layer
+type LayerConnectionsSnapshot struct {
+	Layer            int      `json:"layer"`
+	ConnectedNodeIDs []string `json:"connected_node_ids"`
 }
 
 // RDBInfo contains information about the RDB file
@@ -288,7 +313,7 @@ func (r *RDBManager) createDatabaseSnapshot(builder *flatbuffers.Builder, dbSnap
 
 // createCollectionSnapshot creates a FlatBuffers CollectionSnapshot
 func (r *RDBManager) createCollectionSnapshot(builder *flatbuffers.Builder, collSnapshot CollectionSnapshot) (flatbuffers.UOffsetT, error) {
-	// Create vectors vector
+	// Create vectors vector (for backwards compatibility)
 	var vectors []flatbuffers.UOffsetT
 	for _, vector := range collSnapshot.Vectors {
 		vectorOffset, err := r.createVector(builder, vector)
@@ -305,6 +330,16 @@ func (r *RDBManager) createCollectionSnapshot(builder *flatbuffers.Builder, coll
 	}
 	vectorsVector := builder.EndVector(len(vectors))
 
+	// Create HNSW graph
+	var hnswGraphOffset flatbuffers.UOffsetT
+	if collSnapshot.HNSWGraph != nil {
+		var err error
+		hnswGraphOffset, err = r.createHNSWGraph(builder, *collSnapshot.HNSWGraph)
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	// Create collection config
 	configOffset, err := r.createCollectionConfig(builder, collSnapshot.Config)
 	if err != nil {
@@ -319,6 +354,9 @@ func (r *RDBManager) createCollectionSnapshot(builder *flatbuffers.Builder, coll
 	fbrdb.CollectionSnapshotAddName(builder, nameStr)
 	fbrdb.CollectionSnapshotAddConfig(builder, configOffset)
 	fbrdb.CollectionSnapshotAddVectors(builder, vectorsVector)
+	if collSnapshot.HNSWGraph != nil {
+		fbrdb.CollectionSnapshotAddHnswGraph(builder, hnswGraphOffset)
+	}
 	fbrdb.CollectionSnapshotAddVectorCount(builder, collSnapshot.VectorCount)
 	fbrdb.CollectionSnapshotAddDeletedCount(builder, collSnapshot.DeletedCount)
 	fbrdb.CollectionSnapshotAddCreatedAt(builder, collSnapshot.CreatedAt.Unix())
@@ -387,6 +425,108 @@ func (r *RDBManager) createHNSWParams(builder *flatbuffers.Builder, params types
 	return fbrdb.HNSWParamsEnd(builder), nil
 }
 
+// createHNSWGraph creates a FlatBuffers HNSWGraph
+func (r *RDBManager) createHNSWGraph(builder *flatbuffers.Builder, graph HNSWGraphSnapshot) (flatbuffers.UOffsetT, error) {
+	// Create nodes vector
+	var nodes []flatbuffers.UOffsetT
+	for _, node := range graph.Nodes {
+		nodeOffset, err := r.createHNSWNode(builder, node)
+		if err != nil {
+			return 0, err
+		}
+		nodes = append(nodes, nodeOffset)
+	}
+
+	// Create nodes vector
+	fbrdb.HNSWGraphStartNodesVector(builder, len(nodes))
+	for i := len(nodes) - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(nodes[i])
+	}
+	nodesVector := builder.EndVector(len(nodes))
+
+	// Create entrypoint string
+	entrypointStr := builder.CreateString(graph.EntryPointID)
+
+	// Create HNSW graph
+	fbrdb.HNSWGraphStart(builder)
+	fbrdb.HNSWGraphAddNodes(builder, nodesVector)
+	fbrdb.HNSWGraphAddEntrypointId(builder, entrypointStr)
+	fbrdb.HNSWGraphAddMaxLayer(builder, int32(graph.MaxLayer))
+	fbrdb.HNSWGraphAddSize(builder, int32(graph.Size))
+
+	return fbrdb.HNSWGraphEnd(builder), nil
+}
+
+// createHNSWNode creates a FlatBuffers HNSWNode
+func (r *RDBManager) createHNSWNode(builder *flatbuffers.Builder, node HNSWNodeSnapshot) (flatbuffers.UOffsetT, error) {
+	// Create elements vector
+	fbrdb.HNSWNodeStartElementsVector(builder, len(node.Elements))
+	for i := len(node.Elements) - 1; i >= 0; i-- {
+		builder.PrependFloat32(node.Elements[i])
+	}
+	elementsVector := builder.EndVector(len(node.Elements))
+
+	// Create layer connections vector
+	var layerConnections []flatbuffers.UOffsetT
+	for _, layerConn := range node.LayerConnections {
+		layerConnOffset, err := r.createLayerConnections(builder, layerConn)
+		if err != nil {
+			return 0, err
+		}
+		layerConnections = append(layerConnections, layerConnOffset)
+	}
+
+	fbrdb.HNSWNodeStartLayerConnectionsVector(builder, len(layerConnections))
+	for i := len(layerConnections) - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(layerConnections[i])
+	}
+	layerConnectionsVector := builder.EndVector(len(layerConnections))
+
+	// Convert metadata to JSON string
+	metadataBytes, err := json.Marshal(node.Metadata)
+	if err != nil {
+		return 0, utils.ErrPersistenceFailedWithCause("failed to marshal node metadata", err)
+	}
+
+	// Create strings
+	idStr := builder.CreateString(node.ID)
+	metadataStr := builder.CreateString(string(metadataBytes))
+
+	// Create HNSW node
+	fbrdb.HNSWNodeStart(builder)
+	fbrdb.HNSWNodeAddId(builder, idStr)
+	fbrdb.HNSWNodeAddElements(builder, elementsVector)
+	fbrdb.HNSWNodeAddMetadata(builder, metadataStr)
+	fbrdb.HNSWNodeAddDeleted(builder, node.Deleted)
+	fbrdb.HNSWNodeAddLayerConnections(builder, layerConnectionsVector)
+	fbrdb.HNSWNodeAddMaxLayer(builder, int32(node.MaxLayer))
+
+	return fbrdb.HNSWNodeEnd(builder), nil
+}
+
+// createLayerConnections creates a FlatBuffers LayerConnections
+func (r *RDBManager) createLayerConnections(builder *flatbuffers.Builder, layerConn LayerConnectionsSnapshot) (flatbuffers.UOffsetT, error) {
+	// Create connected node IDs vector
+	var connectedNodeIDs []flatbuffers.UOffsetT
+	for _, nodeID := range layerConn.ConnectedNodeIDs {
+		nodeIDStr := builder.CreateString(nodeID)
+		connectedNodeIDs = append(connectedNodeIDs, nodeIDStr)
+	}
+
+	fbrdb.LayerConnectionsStartConnectedNodeIdsVector(builder, len(connectedNodeIDs))
+	for i := len(connectedNodeIDs) - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(connectedNodeIDs[i])
+	}
+	connectedNodeIDsVector := builder.EndVector(len(connectedNodeIDs))
+
+	// Create layer connections
+	fbrdb.LayerConnectionsStart(builder)
+	fbrdb.LayerConnectionsAddLayer(builder, int32(layerConn.Layer))
+	fbrdb.LayerConnectionsAddConnectedNodeIds(builder, connectedNodeIDsVector)
+
+	return fbrdb.LayerConnectionsEnd(builder), nil
+}
+
 // parseDatabaseSnapshot parses a FlatBuffers DatabaseSnapshot to Go struct
 func (r *RDBManager) parseDatabaseSnapshot(fbDb *fbrdb.DatabaseSnapshot) (*DatabaseSnapshot, error) {
 	dbSnapshot := &DatabaseSnapshot{
@@ -430,7 +570,7 @@ func (r *RDBManager) parseCollectionSnapshot(fbColl *fbrdb.CollectionSnapshot) (
 		UpdatedAt:    time.Unix(fbColl.UpdatedAt(), 0),
 	}
 
-	// Parse vectors
+	// Parse vectors (for backwards compatibility)
 	for i := 0; i < fbColl.VectorsLength(); i++ {
 		fbVec := new(fbrdb.Vector)
 		if !fbColl.Vectors(fbVec, i) {
@@ -443,6 +583,15 @@ func (r *RDBManager) parseCollectionSnapshot(fbColl *fbrdb.CollectionSnapshot) (
 		}
 
 		collSnapshot.Vectors = append(collSnapshot.Vectors, *vector)
+	}
+
+	// Parse HNSW graph if present
+	if fbGraph := fbColl.HnswGraph(nil); fbGraph != nil {
+		hnswGraph, err := r.parseHNSWGraph(fbGraph)
+		if err != nil {
+			return nil, err
+		}
+		collSnapshot.HNSWGraph = hnswGraph
 	}
 
 	return collSnapshot, nil
@@ -495,6 +644,89 @@ func (r *RDBManager) parseHNSWParams(fbParams *fbrdb.HNSWParams) (*types.HNSWPar
 		MaxLayers:      int(fbParams.MaxLayers()),
 		Seed:           fbParams.Seed(),
 	}, nil
+}
+
+// parseHNSWGraph parses a FlatBuffers HNSWGraph to Go struct
+func (r *RDBManager) parseHNSWGraph(fbGraph *fbrdb.HNSWGraph) (*HNSWGraphSnapshot, error) {
+	graph := &HNSWGraphSnapshot{
+		EntryPointID: string(fbGraph.EntrypointId()),
+		MaxLayer:     int(fbGraph.MaxLayer()),
+		Size:         int(fbGraph.Size()),
+	}
+
+	// Parse nodes
+	for i := 0; i < fbGraph.NodesLength(); i++ {
+		fbNode := new(fbrdb.HNSWNode)
+		if !fbGraph.Nodes(fbNode, i) {
+			return nil, utils.ErrCorruptedData("failed to parse HNSW node")
+		}
+
+		node, err := r.parseHNSWNode(fbNode)
+		if err != nil {
+			return nil, err
+		}
+
+		graph.Nodes = append(graph.Nodes, *node)
+	}
+
+	return graph, nil
+}
+
+// parseHNSWNode parses a FlatBuffers HNSWNode to Go struct
+func (r *RDBManager) parseHNSWNode(fbNode *fbrdb.HNSWNode) (*HNSWNodeSnapshot, error) {
+	// Parse elements
+	elements := make([]float32, fbNode.ElementsLength())
+	for i := 0; i < fbNode.ElementsLength(); i++ {
+		elements[i] = fbNode.Elements(i)
+	}
+
+	// Parse metadata
+	var metadata map[string]interface{}
+	if metadataBytes := fbNode.Metadata(); metadataBytes != nil {
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+			return nil, utils.ErrCorruptedData("failed to parse node metadata: " + err.Error())
+		}
+	}
+
+	node := &HNSWNodeSnapshot{
+		ID:       string(fbNode.Id()),
+		Elements: elements,
+		Metadata: metadata,
+		Deleted:  fbNode.Deleted(),
+		MaxLayer: int(fbNode.MaxLayer()),
+	}
+
+	// Parse layer connections
+	for i := 0; i < fbNode.LayerConnectionsLength(); i++ {
+		fbLayerConn := new(fbrdb.LayerConnections)
+		if !fbNode.LayerConnections(fbLayerConn, i) {
+			return nil, utils.ErrCorruptedData("failed to parse layer connections")
+		}
+
+		layerConn, err := r.parseLayerConnections(fbLayerConn)
+		if err != nil {
+			return nil, err
+		}
+
+		node.LayerConnections = append(node.LayerConnections, *layerConn)
+	}
+
+	return node, nil
+}
+
+// parseLayerConnections parses a FlatBuffers LayerConnections to Go struct
+func (r *RDBManager) parseLayerConnections(fbLayerConn *fbrdb.LayerConnections) (*LayerConnectionsSnapshot, error) {
+	layerConn := &LayerConnectionsSnapshot{
+		Layer: int(fbLayerConn.Layer()),
+	}
+
+	// Parse connected node IDs
+	for i := 0; i < fbLayerConn.ConnectedNodeIdsLength(); i++ {
+		nodeID := string(fbLayerConn.ConnectedNodeIds(i))
+		layerConn.ConnectedNodeIDs = append(layerConn.ConnectedNodeIDs, nodeID)
+	}
+
+	return layerConn, nil
 }
 
 // validateSnapshot validates the integrity of a loaded snapshot

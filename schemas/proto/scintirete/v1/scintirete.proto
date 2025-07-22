@@ -44,6 +44,12 @@ service ScintireteService {
   rpc EmbedAndInsert(EmbedAndInsertRequest) returns (google.protobuf.Empty);
   // 传入文本，自动调用 embedding API 后进行搜索
   rpc EmbedAndSearch(EmbedAndSearchRequest) returns (SearchResponse);
+
+  // --- 持久化操作 ---
+  // 同步保存 RDB 快照（阻塞操作）
+  rpc Save(SaveRequest) returns (SaveResponse);
+  // 后台异步保存 RDB 快照（非阻塞操作）
+  rpc BgSave(BgSaveRequest) returns (BgSaveResponse);
 }
 
 
@@ -210,4 +216,26 @@ message EmbedAndSearchRequest {
   optional int32 ef_search = 7;
   optional bool include_vector = 8; // 是否在结果中包含向量数据，默认为 false 以提高性能
   // string filter = 9;
+}
+
+// --- 持久化操作 ---
+message SaveRequest {
+  AuthInfo auth = 1;
+}
+
+message SaveResponse {
+  bool success = 1;
+  string message = 2;
+  int64 snapshot_size = 3; // 快照文件大小（字节）
+  double duration_seconds = 4; // 保存耗时（秒）
+}
+
+message BgSaveRequest {
+  AuthInfo auth = 1;
+}
+
+message BgSaveResponse {
+  bool success = 1;
+  string message = 2;
+  string job_id = 3; // 后台任务ID，用于查询状态
 } 

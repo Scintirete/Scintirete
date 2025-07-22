@@ -101,20 +101,20 @@ Using the CLI tool to perform basic vector operations:
 
 # Insert text with automatic embedding
 ./bin/scintirete-cli -p "your-password" text insert my_app documents \
-  --id "doc1" \
-  --text "Scintirete is a lightweight vector database optimized for production use." \
-  --metadata '{"source":"documentation","type":"intro"}'
+  "doc1" \
+  "Scintirete is a lightweight vector database optimized for production use." \
+  '{"source":"documentation","type":"intro"}'
 
 # Insert more documents
 ./bin/scintirete-cli -p "your-password" text insert my_app documents \
-  --id "doc2" \
-  --text "HNSW algorithm provides efficient approximate nearest neighbor search." \
-  --metadata '{"source":"documentation","type":"technical"}'
+  "doc2" \
+  "HNSW algorithm provides efficient approximate nearest neighbor search." \
+  '{"source":"documentation","type":"technical"}'
 
 # Search for similar content
 ./bin/scintirete-cli -p "your-password" text search my_app documents \
-  --query "What is Scintirete?" \
-  --top-k 5
+  "What is Scintirete?" \
+  5
 
 # Get collection information
 ./bin/scintirete-cli -p "your-password" collection info my_app documents
