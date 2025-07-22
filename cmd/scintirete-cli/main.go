@@ -37,25 +37,18 @@ type Command struct {
 
 func makeCommands() map[string]Command {
 	return map[string]Command{
-		"help":              {Name: "help", Description: "Show help information", Usage: "help [command]", Handler: (*CLI).helpCommand},
-		"quit":              {Name: "quit", Description: "Exit the CLI", Usage: "quit", Handler: (*CLI).quitCommand},
-		"exit":              {Name: "exit", Description: "Exit the CLI", Usage: "exit", Handler: (*CLI).quitCommand},
-		"ping":              {Name: "ping", Description: "Test connection to server", Usage: "ping", Handler: (*CLI).pingCommand},
-		"version":           {Name: "version", Description: "Show version information", Usage: "version", Handler: (*CLI).versionCommand},
-		"list-databases":    {Name: "list-databases", Description: "List all databases", Usage: "list-databases", Handler: (*CLI).listDatabasesCommand},
-		"create-database":   {Name: "create-database", Description: "Create a new database", Usage: "create-database <n>", Handler: (*CLI).createDatabaseCommand},
-		"drop-database":     {Name: "drop-database", Description: "Drop a database", Usage: "drop-database <n>", Handler: (*CLI).dropDatabaseCommand},
-		"use":               {Name: "use", Description: "Switch to a database", Usage: "use <database>", Handler: (*CLI).useCommand},
-		"list-collections":  {Name: "list-collections", Description: "List collections in current database", Usage: "list-collections", Handler: (*CLI).listCollectionsCommand},
-		"create-collection": {Name: "create-collection", Description: "Create a new collection", Usage: "create-collection <n> <metric> [hnsw-params]", Handler: (*CLI).createCollectionCommand},
-		"drop-collection":   {Name: "drop-collection", Description: "Drop a collection", Usage: "drop-collection <n>", Handler: (*CLI).dropCollectionCommand},
-		"collection-info":   {Name: "collection-info", Description: "Get collection information", Usage: "collection-info <n>", Handler: (*CLI).collectionInfoCommand},
-		"insert":            {Name: "insert", Description: "Insert vectors into a collection", Usage: "insert <collection> <id> <vector> [metadata]", Handler: (*CLI).insertCommand},
-		"search":            {Name: "search", Description: "Search for similar vectors", Usage: "search <collection> <vector> [top-k] [ef-search]", Handler: (*CLI).searchCommand},
-		"delete":            {Name: "delete", Description: "Delete vectors from a collection", Usage: "delete <collection> <id1> [id2] ...", Handler: (*CLI).deleteCommand},
-		"text":              {Name: "text", Description: "Text embedding operations", Usage: "text <insert|search> <args...>", Handler: (*CLI).textCommand},
-		"save":              {Name: "save", Description: "Synchronously save RDB snapshot", Usage: "save", Handler: (*CLI).saveCommand},
-		"bgsave":            {Name: "bgsave", Description: "Asynchronously save RDB snapshot", Usage: "bgsave", Handler: (*CLI).bgsaveCommand},
+		"help":       {Name: "help", Description: "Show help information", Usage: "help [command]", Handler: (*CLI).helpCommand},
+		"quit":       {Name: "quit", Description: "Exit the CLI", Usage: "quit", Handler: (*CLI).quitCommand},
+		"exit":       {Name: "exit", Description: "Exit the CLI", Usage: "exit", Handler: (*CLI).quitCommand},
+		"ping":       {Name: "ping", Description: "Test connection to server", Usage: "ping", Handler: (*CLI).pingCommand},
+		"version":    {Name: "version", Description: "Show version information", Usage: "version", Handler: (*CLI).versionCommand},
+		"use":        {Name: "use", Description: "Switch to a database", Usage: "use <database>", Handler: (*CLI).useCommand},
+		"database":   {Name: "database", Description: "Database operations", Usage: "database <list|create|drop> [args...]", Handler: (*CLI).databaseCommand},
+		"collection": {Name: "collection", Description: "Collection operations", Usage: "collection <list|create|drop|info> [args...]", Handler: (*CLI).collectionCommand},
+		"vector":     {Name: "vector", Description: "Vector operations", Usage: "vector <insert|search|delete> [args...]", Handler: (*CLI).vectorCommand},
+		"text":       {Name: "text", Description: "Text embedding operations", Usage: "text <insert|search> <args...>", Handler: (*CLI).textCommand},
+		"save":       {Name: "save", Description: "Synchronously save RDB snapshot", Usage: "save", Handler: (*CLI).saveCommand},
+		"bgsave":     {Name: "bgsave", Description: "Asynchronously save RDB snapshot", Usage: "bgsave", Handler: (*CLI).bgsaveCommand},
 	}
 }
 
@@ -235,12 +228,56 @@ func (c *CLI) helpCommand(args []string) error {
 			fmt.Printf("  %-20s %s\n", cmd.Name, cmd.Description)
 		}
 		fmt.Println()
+		fmt.Println("Sub-commands:")
+		fmt.Println("  database list              List all databases")
+		fmt.Println("  database create <name>     Create a new database")
+		fmt.Println("  database drop <name>       Drop a database")
+		fmt.Println()
+		fmt.Println("  collection list            List collections in current database")
+		fmt.Println("  collection create <name> <metric> [m] [ef_construction]  Create a collection")
+		fmt.Println("  collection drop <name>     Drop a collection")
+		fmt.Println("  collection info <name>     Get collection information")
+		fmt.Println()
+		fmt.Println("  vector insert <collection> <id> <vector> [metadata]     Insert vectors")
+		fmt.Println("  vector search <collection> <vector> [top-k] [ef-search] Search vectors")
+		fmt.Println("  vector delete <collection> <id1> [id2] ...              Delete vectors")
+		fmt.Println()
+		fmt.Println("  text insert <collection> <id> <text> [metadata] [model] Insert text with embedding")
+		fmt.Println("  text search <collection> <text> [top-k] [ef-search] [model] Search text with embedding")
+		fmt.Println()
 		fmt.Println("Type 'help <command>' for detailed usage information.")
 	} else {
 		cmdName := strings.ToLower(args[0])
 		if cmd, exists := commands[cmdName]; exists {
 			fmt.Printf("%s - %s\n", cmd.Name, cmd.Description)
 			fmt.Printf("Usage: %s\n", cmd.Usage)
+
+			// Provide detailed help for sub-commands
+			switch cmdName {
+			case "database":
+				fmt.Println("\nSub-commands:")
+				fmt.Println("  list               List all databases")
+				fmt.Println("  create <name>      Create a new database")
+				fmt.Println("  drop <name>        Drop a database")
+			case "collection":
+				fmt.Println("\nSub-commands:")
+				fmt.Println("  list                             List collections in current database")
+				fmt.Println("  create <name> <metric> [params]  Create a collection")
+				fmt.Println("    Metrics: L2, COSINE, INNER_PRODUCT")
+				fmt.Println("    Optional params: <m> <ef_construction>")
+				fmt.Println("  drop <name>                      Drop a collection")
+				fmt.Println("  info <name>                      Get collection information")
+			case "vector":
+				fmt.Println("\nSub-commands:")
+				fmt.Println("  insert <collection> <id> <vector> [metadata]     Insert vectors")
+				fmt.Println("    Vector format: JSON array, e.g., [1.0, 2.0, 3.0]")
+				fmt.Println("  search <collection> <vector> [top-k] [ef-search] Search vectors")
+				fmt.Println("  delete <collection> <id1> [id2] ...              Delete vectors")
+			case "text":
+				fmt.Println("\nSub-commands:")
+				fmt.Println("  insert <collection> <id> <text> [metadata] [model] Insert text with embedding")
+				fmt.Println("  search <collection> <text> [top-k] [ef-search] [model] Search text with embedding")
+			}
 		} else {
 			return fmt.Errorf("unknown command: %s", cmdName)
 		}
@@ -278,6 +315,43 @@ func (c *CLI) versionCommand(args []string) error {
 	fmt.Printf("Scintirete CLI %s\n", version)
 	fmt.Printf("Commit: %s\n", commit)
 	return nil
+}
+
+func (c *CLI) useCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: use <database>")
+	}
+
+	*database = args[0]
+	c.prompt = fmt.Sprintf("scintirete[%s]> ", *database)
+	fmt.Printf("Switched to database '%s'.\n", *database)
+	return nil
+}
+
+func (c *CLI) databaseCommand(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: database <list|create|drop> [args...]")
+	}
+
+	subCommand := strings.ToLower(args[0])
+	subArgs := args[1:]
+
+	switch subCommand {
+	case "list":
+		return c.listDatabasesCommand(subArgs)
+	case "create":
+		if len(subArgs) < 1 {
+			return fmt.Errorf("usage: database create <name>")
+		}
+		return c.createDatabaseCommand(subArgs)
+	case "drop":
+		if len(subArgs) < 1 {
+			return fmt.Errorf("usage: database drop <name>")
+		}
+		return c.dropDatabaseCommand(subArgs)
+	default:
+		return fmt.Errorf("unknown database sub-command: %s", subCommand)
+	}
 }
 
 func (c *CLI) listDatabasesCommand(args []string) error {
@@ -346,15 +420,39 @@ func (c *CLI) dropDatabaseCommand(args []string) error {
 	return nil
 }
 
-func (c *CLI) useCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: use <database>")
+func (c *CLI) collectionCommand(args []string) error {
+	if *database == "" {
+		return fmt.Errorf("no database selected. Use 'use <database>' first")
 	}
 
-	*database = args[0]
-	c.prompt = fmt.Sprintf("scintirete[%s]> ", *database)
-	fmt.Printf("Switched to database '%s'.\n", *database)
-	return nil
+	if len(args) == 0 {
+		return fmt.Errorf("usage: collection <list|create|drop|info> [args...]")
+	}
+
+	subCommand := strings.ToLower(args[0])
+	subArgs := args[1:]
+
+	switch subCommand {
+	case "list":
+		return c.listCollectionsCommand(subArgs)
+	case "create":
+		if len(subArgs) < 2 {
+			return fmt.Errorf("usage: collection create <name> <metric> [m] [ef_construction]")
+		}
+		return c.createCollectionCommand(subArgs)
+	case "drop":
+		if len(subArgs) < 1 {
+			return fmt.Errorf("usage: collection drop <name>")
+		}
+		return c.dropCollectionCommand(subArgs)
+	case "info":
+		if len(subArgs) < 1 {
+			return fmt.Errorf("usage: collection info <name>")
+		}
+		return c.collectionInfoCommand(subArgs)
+	default:
+		return fmt.Errorf("unknown collection sub-command: %s", subCommand)
+	}
 }
 
 func (c *CLI) listCollectionsCommand(args []string) error {
@@ -510,6 +608,39 @@ func (c *CLI) collectionInfoCommand(args []string) error {
 	}
 
 	return nil
+}
+
+func (c *CLI) vectorCommand(args []string) error {
+	if *database == "" {
+		return fmt.Errorf("no database selected. Use 'use <database>' first")
+	}
+
+	if len(args) == 0 {
+		return fmt.Errorf("usage: vector <insert|search|delete> [args...]")
+	}
+
+	subCommand := strings.ToLower(args[0])
+	subArgs := args[1:]
+
+	switch subCommand {
+	case "insert":
+		if len(subArgs) < 3 {
+			return fmt.Errorf("usage: vector insert <collection> <id> <vector> [metadata]")
+		}
+		return c.insertCommand(subArgs)
+	case "search":
+		if len(subArgs) < 2 {
+			return fmt.Errorf("usage: vector search <collection> <vector> [top-k] [ef-search]")
+		}
+		return c.searchCommand(subArgs)
+	case "delete":
+		if len(subArgs) < 2 {
+			return fmt.Errorf("usage: vector delete <collection> <id1> [id2] ...")
+		}
+		return c.deleteCommand(subArgs)
+	default:
+		return fmt.Errorf("unknown vector sub-command: %s", subCommand)
+	}
 }
 
 func (c *CLI) insertCommand(args []string) error {
