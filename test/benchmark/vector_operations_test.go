@@ -42,9 +42,9 @@ func generateRandomVector(id string, dimension int) types.Vector {
 	}
 
 	return types.Vector{
-		ID:       id,
+		ID:       0, // Will be auto-generated
 		Elements: vector,
-		Metadata: map[string]interface{}{"benchmark": true, "id": id},
+		Metadata: map[string]interface{}{"benchmark": true, "name": id},
 	}
 }
 

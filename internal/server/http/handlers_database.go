@@ -23,13 +23,13 @@ func (h *Server) handleCreateDatabase(c *gin.Context) {
 		return
 	}
 
-	_, err := h.grpcServer.CreateDatabase(c.Request.Context(), &req)
+	resp, err := h.grpcServer.CreateDatabase(c.Request.Context(), &req)
 	if err != nil {
 		h.handleGRPCError(c, err)
 		return
 	}
 
-	h.respondSuccess(c, http.StatusCreated, "Database created successfully")
+	h.respondJSON(c, http.StatusCreated, resp)
 }
 
 // handleDropDatabase handles database deletion requests
@@ -42,13 +42,13 @@ func (h *Server) handleDropDatabase(c *gin.Context) {
 		Name: dbName,
 	}
 
-	_, err := h.grpcServer.DropDatabase(c.Request.Context(), req)
+	resp, err := h.grpcServer.DropDatabase(c.Request.Context(), req)
 	if err != nil {
 		h.handleGRPCError(c, err)
 		return
 	}
 
-	h.respondSuccess(c, http.StatusOK, "Database dropped successfully")
+	h.respondJSON(c, http.StatusOK, resp)
 }
 
 // handleListDatabases handles database list requests

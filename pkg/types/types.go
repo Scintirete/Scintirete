@@ -62,7 +62,7 @@ func DistanceMetricFromProto(pbMetric pb.DistanceMetric) DistanceMetric {
 
 // Vector represents a vector with ID, elements, and metadata
 type Vector struct {
-	ID       string                 `json:"id"`
+	ID       uint64                 `json:"id"`
 	Elements []float32              `json:"elements"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -74,7 +74,7 @@ func (v *Vector) Dimension() int {
 
 // TextWithMetadata represents text data with metadata for embedding
 type TextWithMetadata struct {
-	ID       string                 `json:"id"`
+	ID       *uint64                `json:"id,omitempty"` // Optional, auto-generated if not provided
 	Text     string                 `json:"text"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }

@@ -29,13 +29,13 @@ func (h *Server) handleInsertVectors(c *gin.Context) {
 		return
 	}
 
-	_, err := h.grpcServer.InsertVectors(c.Request.Context(), &req)
+	resp, err := h.grpcServer.InsertVectors(c.Request.Context(), &req)
 	if err != nil {
 		h.handleGRPCError(c, err)
 		return
 	}
 
-	h.respondSuccess(c, http.StatusCreated, "Vectors inserted successfully")
+	h.respondJSON(c, http.StatusCreated, resp)
 }
 
 // handleDeleteVectors handles vector deletion requests

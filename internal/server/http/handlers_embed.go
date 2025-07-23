@@ -29,13 +29,13 @@ func (h *Server) handleEmbedAndInsert(c *gin.Context) {
 		return
 	}
 
-	_, err := h.grpcServer.EmbedAndInsert(c.Request.Context(), &req)
+	resp, err := h.grpcServer.EmbedAndInsert(c.Request.Context(), &req)
 	if err != nil {
 		h.handleGRPCError(c, err)
 		return
 	}
 
-	h.respondSuccess(c, http.StatusCreated, "Texts embedded and inserted successfully")
+	h.respondJSON(c, http.StatusCreated, resp)
 }
 
 // handleEmbedAndSearch handles text embedding and search requests
@@ -64,6 +64,46 @@ func (h *Server) handleEmbedAndSearch(c *gin.Context) {
 	}
 
 	resp, err := h.grpcServer.EmbedAndSearch(c.Request.Context(), &req)
+	if err != nil {
+		h.handleGRPCError(c, err)
+		return
+	}
+
+	h.respondJSON(c, http.StatusOK, resp)
+}
+
+// handleEmbedText handles text embedding requests
+func (h *Server) handleEmbedText(c *gin.Context) {
+	var req pb.EmbedTextRequest
+	if err := h.bindJSON(c, &req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "Invalid JSON", err)
+		return
+	}
+
+	// Validate required fields
+	if len(req.Texts) == 0 {
+		h.respondError(c, http.StatusBadRequest, "Texts are required", nil)
+		return
+	}
+
+	resp, err := h.grpcServer.EmbedText(c.Request.Context(), &req)
+	if err != nil {
+		h.handleGRPCError(c, err)
+		return
+	}
+
+	h.respondJSON(c, http.StatusOK, resp)
+}
+
+// handleListEmbeddingModels handles embedding models list requests
+func (h *Server) handleListEmbeddingModels(c *gin.Context) {
+	password := c.GetHeader("Authorization")
+
+	req := &pb.ListEmbeddingModelsRequest{
+		Auth: &pb.AuthInfo{Password: password},
+	}
+
+	resp, err := h.grpcServer.ListEmbeddingModels(c.Request.Context(), req)
 	if err != nil {
 		h.handleGRPCError(c, err)
 		return

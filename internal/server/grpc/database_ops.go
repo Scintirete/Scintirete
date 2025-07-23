@@ -8,11 +8,10 @@ import (
 	"github.com/scintirete/scintirete/internal/utils"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // CreateDatabase creates a new database
-func (s *Server) CreateDatabase(ctx context.Context, req *pb.CreateDatabaseRequest) (*emptypb.Empty, error) {
+func (s *Server) CreateDatabase(ctx context.Context, req *pb.CreateDatabaseRequest) (*pb.CreateDatabaseResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -43,11 +42,15 @@ func (s *Server) CreateDatabase(ctx context.Context, req *pb.CreateDatabaseReque
 	})
 
 	s.updateRequestStats()
-	return &emptypb.Empty{}, nil
+	return &pb.CreateDatabaseResponse{
+		Name:    req.Name,
+		Success: true,
+		Message: "Database created successfully",
+	}, nil
 }
 
 // DropDatabase removes a database and all its collections
-func (s *Server) DropDatabase(ctx context.Context, req *pb.DropDatabaseRequest) (*emptypb.Empty, error) {
+func (s *Server) DropDatabase(ctx context.Context, req *pb.DropDatabaseRequest) (*pb.DropDatabaseResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -56,6 +59,14 @@ func (s *Server) DropDatabase(ctx context.Context, req *pb.DropDatabaseRequest) 
 	// Validate input
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "database name cannot be empty")
+	}
+
+	// Get collection count before dropping
+	var droppedCollections int32
+	if db, err := s.engine.GetDatabase(ctx, req.Name); err == nil {
+		if collections, err := db.ListCollections(ctx); err == nil {
+			droppedCollections = int32(len(collections))
+		}
 	}
 
 	// Drop database
@@ -77,7 +88,12 @@ func (s *Server) DropDatabase(ctx context.Context, req *pb.DropDatabaseRequest) 
 	})
 
 	s.updateRequestStats()
-	return &emptypb.Empty{}, nil
+	return &pb.DropDatabaseResponse{
+		Name:               req.Name,
+		Success:            true,
+		Message:            "Database dropped successfully",
+		DroppedCollections: droppedCollections,
+	}, nil
 }
 
 // ListDatabases returns a list of all database names

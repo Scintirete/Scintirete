@@ -242,8 +242,8 @@ func (c *CLI) helpCommand(args []string) error {
 		fmt.Println("  vector search <collection> <vector> [top-k] [ef-search] Search vectors")
 		fmt.Println("  vector delete <collection> <id1> [id2] ...              Delete vectors")
 		fmt.Println()
-		fmt.Println("  text insert <collection> <id> <text> [metadata] [model] Insert text with embedding")
-		fmt.Println("  text search <collection> <text> [top-k] [ef-search] [model] Search text with embedding")
+		fmt.Println("  text insert <collection> [model] <id> <text> [metadata] Insert text with embedding")
+		fmt.Println("  text search <collection> [model] <text> [top-k] [ef-search] Search text with embedding")
 		fmt.Println()
 		fmt.Println("Type 'help <command>' for detailed usage information.")
 	} else {
@@ -275,8 +275,8 @@ func (c *CLI) helpCommand(args []string) error {
 				fmt.Println("  delete <collection> <id1> [id2] ...              Delete vectors")
 			case "text":
 				fmt.Println("\nSub-commands:")
-				fmt.Println("  insert <collection> <id> <text> [metadata] [model] Insert text with embedding")
-				fmt.Println("  search <collection> <text> [top-k] [ef-search] [model] Search text with embedding")
+				fmt.Println("  insert <collection> [model] <id> <text> [metadata] Insert text with embedding")
+				fmt.Println("  search <collection> [model] <text> [top-k] [ef-search] Search text with embedding")
 			}
 		} else {
 			return fmt.Errorf("unknown command: %s", cmdName)
@@ -662,8 +662,18 @@ func (c *CLI) insertCommand(args []string) error {
 		return fmt.Errorf("invalid vector format: %v. Use JSON array format: [1.0, 2.0, 3.0]", err)
 	}
 
+	// Convert string ID to uint64 (0 means auto-generate)
+	var numericId uint64
+	if id != "auto" && id != "" {
+		var err error
+		numericId, err = strconv.ParseUint(id, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid ID format: %v. Use a number or 'auto' for auto-generation", err)
+		}
+	}
+
 	pbVector := &pb.Vector{
-		Id:       id,
+		Id:       numericId,
 		Elements: vector,
 	}
 
@@ -780,7 +790,17 @@ func (c *CLI) deleteCommand(args []string) error {
 	}
 
 	collection := args[0]
-	ids := args[1:]
+	stringIds := args[1:]
+
+	// Convert string IDs to uint64
+	ids := make([]uint64, len(stringIds))
+	for i, strId := range stringIds {
+		id, err := strconv.ParseUint(strId, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid ID format '%s': %v. IDs must be numbers", strId, err)
+		}
+		ids[i] = id
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -812,12 +832,12 @@ func (c *CLI) textCommand(args []string) error {
 	switch subCommand {
 	case "insert":
 		if len(subArgs) < 3 {
-			return fmt.Errorf("usage: text insert <collection> <id> <text> [metadata] [model]")
+			return fmt.Errorf("usage: text insert <collection> [model] <id> <text> [metadata]")
 		}
 		return c.textInsertCommand(subArgs)
 	case "search":
 		if len(subArgs) < 2 {
-			return fmt.Errorf("usage: text search <collection> <text> [top-k] [ef-search] [model]")
+			return fmt.Errorf("usage: text search <collection> [model] <text> [top-k] [ef-search]")
 		}
 		return c.textSearchCommand(subArgs)
 	default:
@@ -828,25 +848,47 @@ func (c *CLI) textCommand(args []string) error {
 // textInsertCommand handles text insertion with embedding
 func (c *CLI) textInsertCommand(args []string) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: text insert <collection> <id> <text> [metadata] [model]")
+		return fmt.Errorf("usage: text insert <collection> [model] <id> <text> [metadata]")
 	}
 
 	collection := args[0]
-	id := args[1]
-	text := args[2]
+
+	// Check if second argument looks like a model (doesn't start with digit or special chars typically used for IDs)
+	var model string
+	var id, text string
+	var startIdx int
+
+	if len(args) >= 4 && !strings.HasPrefix(args[1], "doc") && !strings.HasPrefix(args[1], "id") &&
+		!strings.Contains(args[1], "-") && !strings.Contains(args[1], "_") && len(args[1]) > 10 {
+		// Assume second argument is model
+		model = args[1]
+		id = args[2]
+		text = args[3]
+		startIdx = 4
+	} else {
+		// No model specified, use defaults
+		id = args[1]
+		text = args[2]
+		startIdx = 3
+	}
 
 	// Parse optional metadata
 	var metadata map[string]interface{}
-	if len(args) >= 4 && args[3] != "" {
-		if err := json.Unmarshal([]byte(args[3]), &metadata); err != nil {
+	if len(args) >= startIdx+1 && args[startIdx] != "" {
+		if err := json.Unmarshal([]byte(args[startIdx]), &metadata); err != nil {
 			return fmt.Errorf("invalid metadata JSON: %v", err)
 		}
 	}
 
-	// Parse optional model
-	var model string
-	if len(args) >= 5 {
-		model = args[4]
+	// Convert string ID to uint64 pointer (nil means auto-generate)
+	var numericId *uint64
+	if id != "auto" && id != "" {
+		var err error
+		val, err := strconv.ParseUint(id, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid ID format: %v. Use a number or 'auto' for auto-generation", err)
+		}
+		numericId = &val
 	}
 
 	// Create the request
@@ -858,7 +900,7 @@ func (c *CLI) textInsertCommand(args []string) error {
 		CollectionName: collection,
 		Texts: []*pb.TextWithMetadata{
 			{
-				Id:   id,
+				Id:   numericId,
 				Text: text,
 			},
 		},
@@ -885,16 +927,32 @@ func (c *CLI) textInsertCommand(args []string) error {
 // textSearchCommand handles text search with embedding
 func (c *CLI) textSearchCommand(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: text search <collection> <text> [top-k] [ef-search] [model]")
+		return fmt.Errorf("usage: text search <collection> [model] <text> [top-k] [ef-search]")
 	}
 
 	collection := args[0]
-	text := args[1]
+
+	// Check if second argument looks like a model name (longer text, no quotes)
+	var model string
+	var text string
+	var startIdx int
+
+	if len(args) >= 3 && len(args[1]) > 10 && !strings.HasPrefix(args[1], "\"") &&
+		!strings.Contains(args[1], " ") {
+		// Assume second argument is model
+		model = args[1]
+		text = args[2]
+		startIdx = 3
+	} else {
+		// No model specified, use defaults
+		text = args[1]
+		startIdx = 2
+	}
 
 	// Parse optional top-k
 	topK := int32(10) // default
-	if len(args) >= 3 {
-		k, err := strconv.Atoi(args[2])
+	if len(args) >= startIdx+1 {
+		k, err := strconv.Atoi(args[startIdx])
 		if err != nil {
 			return fmt.Errorf("invalid top-k value: %v", err)
 		}
@@ -903,18 +961,12 @@ func (c *CLI) textSearchCommand(args []string) error {
 
 	// Parse optional ef-search
 	var efSearch *int32
-	if len(args) >= 4 {
-		ef, err := strconv.Atoi(args[3])
+	if len(args) >= startIdx+2 {
+		ef, err := strconv.Atoi(args[startIdx+1])
 		if err != nil {
 			return fmt.Errorf("invalid ef-search value: %v", err)
 		}
 		efSearch = &[]int32{int32(ef)}[0]
-	}
-
-	// Parse optional model
-	var model string
-	if len(args) >= 5 {
-		model = args[4]
 	}
 
 	// Create the request

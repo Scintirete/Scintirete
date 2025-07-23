@@ -9,11 +9,10 @@ import (
 	"github.com/scintirete/scintirete/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // CreateCollection creates a new collection in a database
-func (s *Server) CreateCollection(ctx context.Context, req *pb.CreateCollectionRequest) (*emptypb.Empty, error) {
+func (s *Server) CreateCollection(ctx context.Context, req *pb.CreateCollectionRequest) (*pb.CreateCollectionResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -72,12 +71,26 @@ func (s *Server) CreateCollection(ctx context.Context, req *pb.CreateCollectionR
 		"hnsw_params":    config.HNSWParams,
 	})
 
+	// Get collection info for response
+	collection, err := db.GetCollection(ctx, req.CollectionName)
+	var collectionInfo *pb.CollectionInfo
+	if err == nil && collection != nil {
+		info := collection.Info()
+		collectionInfo = info.ToProto()
+	}
+
 	s.updateRequestStats()
-	return &emptypb.Empty{}, nil
+	return &pb.CreateCollectionResponse{
+		DbName:         req.DbName,
+		CollectionName: req.CollectionName,
+		Success:        true,
+		Message:        "Collection created successfully",
+		Info:           collectionInfo,
+	}, nil
 }
 
 // DropCollection removes a collection from a database
-func (s *Server) DropCollection(ctx context.Context, req *pb.DropCollectionRequest) (*emptypb.Empty, error) {
+func (s *Server) DropCollection(ctx context.Context, req *pb.DropCollectionRequest) (*pb.DropCollectionResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -119,7 +132,13 @@ func (s *Server) DropCollection(ctx context.Context, req *pb.DropCollectionReque
 	})
 
 	s.updateRequestStats()
-	return &emptypb.Empty{}, nil
+	return &pb.DropCollectionResponse{
+		DbName:         req.DbName,
+		CollectionName: req.CollectionName,
+		Success:        true,
+		Message:        "Collection dropped successfully",
+		DroppedVectors: 0, // TODO: Get actual count
+	}, nil
 }
 
 // GetCollectionInfo returns metadata about a collection

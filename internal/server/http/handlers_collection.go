@@ -31,13 +31,13 @@ func (h *Server) handleCreateCollection(c *gin.Context) {
 		return
 	}
 
-	_, err := h.grpcServer.CreateCollection(c.Request.Context(), &req)
+	resp, err := h.grpcServer.CreateCollection(c.Request.Context(), &req)
 	if err != nil {
 		h.handleGRPCError(c, err)
 		return
 	}
 
-	h.respondSuccess(c, http.StatusCreated, "Collection created successfully")
+	h.respondJSON(c, http.StatusCreated, resp)
 }
 
 // handleDropCollection handles collection deletion requests
@@ -52,13 +52,13 @@ func (h *Server) handleDropCollection(c *gin.Context) {
 		CollectionName: collName,
 	}
 
-	_, err := h.grpcServer.DropCollection(c.Request.Context(), req)
+	resp, err := h.grpcServer.DropCollection(c.Request.Context(), req)
 	if err != nil {
 		h.handleGRPCError(c, err)
 		return
 	}
 
-	h.respondSuccess(c, http.StatusOK, "Collection dropped successfully")
+	h.respondJSON(c, http.StatusOK, resp)
 }
 
 // handleGetCollectionInfo handles collection info requests

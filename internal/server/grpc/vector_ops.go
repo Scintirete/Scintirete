@@ -3,10 +3,10 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
@@ -15,7 +15,7 @@ import (
 )
 
 // InsertVectors adds vectors to a collection
-func (s *Server) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest) (*emptypb.Empty, error) {
+func (s *Server) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest) (*pb.InsertVectorsResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -34,10 +34,8 @@ func (s *Server) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest
 
 	// Convert protobuf vectors to internal format
 	vectors := make([]types.Vector, len(req.Vectors))
+	insertedIds := make([]uint64, len(req.Vectors))
 	for i, pbVector := range req.Vectors {
-		if pbVector.Id == "" {
-			return nil, status.Error(codes.InvalidArgument, "vector ID cannot be empty")
-		}
 		if len(pbVector.Elements) == 0 {
 			return nil, status.Error(codes.InvalidArgument, "vector elements cannot be empty")
 		}
@@ -49,10 +47,11 @@ func (s *Server) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest
 		}
 
 		vectors[i] = types.Vector{
-			ID:       pbVector.Id,
+			ID:       pbVector.Id, // This will be auto-generated in the collection
 			Elements: pbVector.Elements,
 			Metadata: metadata,
 		}
+		insertedIds[i] = pbVector.Id
 	}
 
 	// Get database
@@ -93,7 +92,10 @@ func (s *Server) InsertVectors(ctx context.Context, req *pb.InsertVectorsRequest
 	})
 
 	s.updateRequestStats()
-	return &emptypb.Empty{}, nil
+	return &pb.InsertVectorsResponse{
+		InsertedIds:   insertedIds,
+		InsertedCount: int32(len(vectors)),
+	}, nil
 }
 
 // DeleteVectors marks vectors as deleted by their IDs
@@ -132,8 +134,14 @@ func (s *Server) DeleteVectors(ctx context.Context, req *pb.DeleteVectorsRequest
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// Convert uint64 IDs to strings for compatibility with existing collection interface
+	stringIds := make([]string, len(req.Ids))
+	for i, id := range req.Ids {
+		stringIds[i] = fmt.Sprintf("%d", id)
+	}
+
 	// Delete vectors
-	deletedCount, err := collection.Delete(ctx, req.Ids)
+	deletedCount, err := collection.Delete(ctx, stringIds)
 	if err != nil {
 		if utils.IsScintireteError(err) {
 			return nil, s.convertError(err)
@@ -142,7 +150,7 @@ func (s *Server) DeleteVectors(ctx context.Context, req *pb.DeleteVectorsRequest
 	}
 
 	// Log to persistence
-	if err := s.persistence.LogDeleteVectors(ctx, req.DbName, req.CollectionName, req.Ids); err != nil {
+	if err := s.persistence.LogDeleteVectors(ctx, req.DbName, req.CollectionName, stringIds); err != nil {
 		return nil, status.Error(codes.Internal, "failed to log delete vectors operation")
 	}
 
@@ -252,7 +260,7 @@ func (s *Server) Search(ctx context.Context, req *pb.SearchRequest) (*pb.SearchR
 }
 
 // EmbedAndInsert processes text through embedding API and inserts the resulting vectors
-func (s *Server) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertRequest) (*emptypb.Empty, error) {
+func (s *Server) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertRequest) (*pb.EmbedAndInsertResponse, error) {
 	// Authenticate
 	if err := s.authenticate(req.Auth); err != nil {
 		return nil, err
@@ -277,7 +285,7 @@ func (s *Server) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertReque
 			metadata = text.Metadata.AsMap()
 		}
 		texts[i] = types.TextWithMetadata{
-			ID:       text.Id,
+			ID:       text.Id, // Can be nil for auto-generation
 			Text:     text.Text,
 			Metadata: metadata,
 		}
@@ -341,8 +349,17 @@ func (s *Server) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertReque
 		"vector_count":    len(vectors),
 	})
 
+	// Extract inserted IDs from vectors
+	insertedIds := make([]uint64, len(vectors))
+	for i, vector := range vectors {
+		insertedIds[i] = vector.ID
+	}
+
 	s.updateRequestStats()
-	return &emptypb.Empty{}, nil
+	return &pb.EmbedAndInsertResponse{
+		InsertedIds:   insertedIds,
+		InsertedCount: int32(len(vectors)),
+	}, nil
 }
 
 // EmbedAndSearch processes query text through embedding API and performs search
@@ -441,5 +458,92 @@ func (s *Server) EmbedAndSearch(ctx context.Context, req *pb.EmbedAndSearchReque
 
 	return &pb.SearchResponse{
 		Results: pbResults,
+	}, nil
+}
+
+// EmbedText converts text to embeddings without inserting into collections
+func (s *Server) EmbedText(ctx context.Context, req *pb.EmbedTextRequest) (*pb.EmbedTextResponse, error) {
+	// Authenticate
+	if err := s.authenticate(req.Auth); err != nil {
+		return nil, err
+	}
+
+	// Validate input
+	if len(req.Texts) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no texts provided")
+	}
+
+	// Get embedding model (use default if not specified)
+	model := "text-embedding-ada-002" // Default model
+	if req.EmbeddingModel != nil {
+		model = *req.EmbeddingModel
+	}
+
+	// Get embeddings for all texts
+	embeddingResp, err := s.embedding.GetEmbeddings(ctx, req.Texts, model)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get embeddings: %v", err)
+	}
+
+	// Convert to response format
+	results := make([]*pb.EmbedTextResult, len(req.Texts))
+	for i, text := range req.Texts {
+		if i < len(embeddingResp.Data) {
+			results[i] = &pb.EmbedTextResult{
+				Text:      text,
+				Embedding: embeddingResp.Data[i].Embedding,
+				Index:     int32(i),
+			}
+		}
+	}
+
+	// Log to audit
+	s.logAuditOperation(ctx, "EmbedText", "", "", req.Auth, map[string]interface{}{
+		"operation_type":  "embedding",
+		"embedding_model": model,
+		"text_count":      len(req.Texts),
+	})
+
+	s.updateRequestStats()
+	return &pb.EmbedTextResponse{Results: results}, nil
+}
+
+// ListEmbeddingModels returns available embedding models
+func (s *Server) ListEmbeddingModels(ctx context.Context, req *pb.ListEmbeddingModelsRequest) (*pb.ListEmbeddingModelsResponse, error) {
+	// Authenticate
+	if err := s.authenticate(req.Auth); err != nil {
+		return nil, err
+	}
+
+	// Return commonly used embedding models (hardcoded for now)
+	models := []*pb.EmbeddingModel{
+		{
+			Id:          "text-embedding-ada-002",
+			Name:        "OpenAI Ada v2",
+			Dimension:   1536,
+			Available:   true,
+			Description: "OpenAI's most capable embedding model",
+		},
+		{
+			Id:          "text-embedding-3-small",
+			Name:        "OpenAI Text Embedding 3 Small",
+			Dimension:   1536,
+			Available:   true,
+			Description: "Smaller, faster embedding model",
+		},
+		{
+			Id:          "text-embedding-3-large",
+			Name:        "OpenAI Text Embedding 3 Large",
+			Dimension:   3072,
+			Available:   true,
+			Description: "Larger, more capable embedding model",
+		},
+	}
+	defaultModel := "text-embedding-ada-002"
+
+	s.updateRequestStats()
+	return &pb.ListEmbeddingModelsResponse{
+		Models:       models,
+		DefaultModel: defaultModel,
 	}, nil
 }

@@ -3,7 +3,6 @@ syntax = "proto3";
 package scintirete.v1;
 
 import "google/protobuf/struct.proto";
-import "google/protobuf/empty.proto";
 
 option go_package = "github.com/scintirete/scintirete/gen/go/scintirete/v1;scintiretev1";
 
@@ -15,17 +14,17 @@ option go_package = "github.com/scintirete/scintirete/gen/go/scintirete/v1;scint
 service ScintireteService {
   // --- 数据库管理 ---
   // 创建一个新的数据库
-  rpc CreateDatabase(CreateDatabaseRequest) returns (google.protobuf.Empty);
+  rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse);
   // 删除一个数据库及其所有集合
-  rpc DropDatabase(DropDatabaseRequest) returns (google.protobuf.Empty);
+  rpc DropDatabase(DropDatabaseRequest) returns (DropDatabaseResponse);
   // 列出所有数据库
   rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse);
 
   // --- 集合管理 ---
   // 在指定数据库中创建一个新的集合
-  rpc CreateCollection(CreateCollectionRequest) returns (google.protobuf.Empty);
+  rpc CreateCollection(CreateCollectionRequest) returns (CreateCollectionResponse);
   // 删除一个集合
-  rpc DropCollection(DropCollectionRequest) returns (google.protobuf.Empty);
+  rpc DropCollection(DropCollectionRequest) returns (DropCollectionResponse);
   // 获取集合的元数据信息
   rpc GetCollectionInfo(GetCollectionInfoRequest) returns (CollectionInfo);
   // 列出指定数据库中的所有集合
@@ -33,7 +32,7 @@ service ScintireteService {
 
   // --- 向量数据操作 ---
   // 插入预先计算好的向量（支持批量）
-  rpc InsertVectors(InsertVectorsRequest) returns (google.protobuf.Empty);
+  rpc InsertVectors(InsertVectorsRequest) returns (InsertVectorsResponse);
   // 删除指定ID的向量（标记删除）
   rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse);
   // 根据向量进行相似度搜索
@@ -41,9 +40,13 @@ service ScintireteService {
 
   // --- 文本自动嵌入与操作 ---
   // 传入文本，自动调用 embedding API 后插入（支持批量）
-  rpc EmbedAndInsert(EmbedAndInsertRequest) returns (google.protobuf.Empty);
+  rpc EmbedAndInsert(EmbedAndInsertRequest) returns (EmbedAndInsertResponse);
   // 传入文本，自动调用 embedding API 后进行搜索
   rpc EmbedAndSearch(EmbedAndSearchRequest) returns (SearchResponse);
+  // 对文本进行编码，返回向量，便于业务端缓存
+  rpc EmbedText(EmbedTextRequest) returns (EmbedTextResponse);
+  // 获取可用的 embedding 模型列表
+  rpc ListEmbeddingModels(ListEmbeddingModelsRequest) returns (ListEmbeddingModelsResponse);
 
   // --- 持久化操作 ---
   // 同步保存 RDB 快照（阻塞操作）
@@ -73,14 +76,14 @@ message HnswConfig {
 
 // 向量数据点
 message Vector {
-  string id = 1;                     // 向量的唯一ID
+  uint64 id = 1;                     // 向量的唯一ID (自增)
   repeated float elements = 2;       // 向量的浮点数表示
   google.protobuf.Struct metadata = 3; // 附加的 JSON 元数据
 }
 
 // 带有元数据的文本，用于自动嵌入
 message TextWithMetadata {
-  string id = 1;                       // 数据的唯一ID
+  optional uint64 id = 1;              // 数据的唯一ID (可选，若不提供则自动生成)
   string text = 2;                     // 原始文本
   google.protobuf.Struct metadata = 3; // 附加的 JSON 元数据
 }
@@ -89,7 +92,7 @@ message TextWithMetadata {
 message SearchResultItem {
   optional Vector vector = 1; // 匹配到的向量（包含ID和元数据），当 include_vector=false 时不返回
   float distance = 2; // 与查询向量的距离/相似度
-  string id = 3; // 向量ID，用于 include_vector=false 时标识结果
+  uint64 id = 3; // 向量ID，用于 include_vector=false 时标识结果
   google.protobuf.Struct metadata = 4; // 元数据，当 include_vector=false 时单独返回
 }
 
@@ -120,9 +123,22 @@ message CreateDatabaseRequest {
   string name = 2;
 }
 
+message CreateDatabaseResponse {
+  string name = 1;        // 创建的数据库名称
+  bool success = 2;       // 是否成功
+  string message = 3;     // 返回消息
+}
+
 message DropDatabaseRequest {
   AuthInfo auth = 1;
   string name = 2;
+}
+
+message DropDatabaseResponse {
+  string name = 1;               // 删除的数据库名称
+  bool success = 2;              // 是否成功
+  string message = 3;            // 返回消息
+  int32 dropped_collections = 4; // 删除的集合数量
 }
 
 message ListDatabasesRequest {
@@ -142,10 +158,26 @@ message CreateCollectionRequest {
   optional HnswConfig hnsw_config = 5; // 创建时可选的 HNSW 参数
 }
 
+message CreateCollectionResponse {
+  string db_name = 1;           // 数据库名称
+  string collection_name = 2;   // 集合名称
+  bool success = 3;             // 是否成功
+  string message = 4;           // 返回消息
+  CollectionInfo info = 5;      // 创建的集合信息
+}
+
 message DropCollectionRequest {
   AuthInfo auth = 1;
   string db_name = 2;
   string collection_name = 3;
+}
+
+message DropCollectionResponse {
+  string db_name = 1;           // 数据库名称
+  string collection_name = 2;   // 集合名称
+  bool success = 3;             // 是否成功
+  string message = 4;           // 返回消息
+  int64 dropped_vectors = 5;    // 删除的向量数量
 }
 
 message GetCollectionInfoRequest {
@@ -171,11 +203,16 @@ message InsertVectorsRequest {
   repeated Vector vectors = 4;
 }
 
+message InsertVectorsResponse {
+  repeated uint64 inserted_ids = 1; // 成功插入的向量 ID 列表
+  int32 inserted_count = 2;         // 成功插入的数量
+}
+
 message DeleteVectorsRequest {
   AuthInfo auth = 1;
   string db_name = 2;
   string collection_name = 3;
-  repeated string ids = 4;
+  repeated uint64 ids = 4;
 }
 
 message DeleteVectorsResponse {
@@ -204,6 +241,44 @@ message EmbedAndInsertRequest {
   string collection_name = 3;
   repeated TextWithMetadata texts = 4;
   optional string embedding_model = 5; // 指定嵌入模型，如果未指定则使用服务器默认
+}
+
+message EmbedAndInsertResponse {
+  repeated uint64 inserted_ids = 1; // 成功插入的向量 ID 列表
+  int32 inserted_count = 2;         // 成功插入的数量
+}
+
+message EmbedTextRequest {
+  AuthInfo auth = 1;
+  repeated string texts = 2;           // 要编码的文本列表
+  optional string embedding_model = 3; // 指定嵌入模型，如果未指定则使用服务器默认
+}
+
+message EmbedTextResponse {
+  repeated EmbedTextResult results = 1;
+}
+
+message EmbedTextResult {
+  string text = 1;                // 原始文本
+  repeated float embedding = 2;   // 编码后的向量
+  int32 index = 3;               // 在请求中的索引位置
+}
+
+message ListEmbeddingModelsRequest {
+  AuthInfo auth = 1;
+}
+
+message ListEmbeddingModelsResponse {
+  repeated EmbeddingModel models = 1;
+  string default_model = 2; // 服务器默认使用的模型
+}
+
+message EmbeddingModel {
+  string id = 1;          // 模型ID
+  string name = 2;        // 模型显示名称
+  int32 dimension = 3;    // 输出向量维度
+  bool available = 4;     // 当前是否可用
+  string description = 5; // 模型描述
 }
 
 message EmbedAndSearchRequest {

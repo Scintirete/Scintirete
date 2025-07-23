@@ -24,6 +24,8 @@ func (h *Server) setupRoutes() {
 	// Text embedding operations
 	api.POST("/databases/:db_name/collections/:coll_name/embed", h.handleEmbedAndInsert)
 	api.POST("/databases/:db_name/collections/:coll_name/embed/search", h.handleEmbedAndSearch)
+	api.POST("/embed", h.handleEmbedText)
+	api.GET("/embed/models", h.handleListEmbeddingModels)
 
 	// Health check
 	api.GET("/health", h.handleHealth)
