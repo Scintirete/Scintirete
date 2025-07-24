@@ -185,7 +185,7 @@ tpm_limit = 90000
 
 Scintirete provides both gRPC and HTTP/JSON APIs:
 
-- **gRPC**: High-performance interface defined in [protobuf](api/proto/scintirete/v1/scintirete.proto)
+- **gRPC**: High-performance interface defined in [protobuf](schemas/proto/scintirete/v1/scintirete.proto)
 - **HTTP/JSON**: RESTful interface accessible at `http://localhost:8080/`
 
 For comprehensive API documentation and usage examples, refer to the [documentation](docs/).

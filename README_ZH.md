@@ -190,7 +190,7 @@ tpm_limit = 90000
 
 Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
 
-- **gRPC**: 高性能接口，定义在 [protobuf](api/proto/scintirete/v1/scintirete.proto) 中
+- **gRPC**: 高性能接口，定义在 [protobuf](schemas/proto/scintirete/v1/scintirete.proto) 中
 - **HTTP/JSON**: RESTful 接口，可通过 `http://localhost:8080/` 访问
 
 全面的 API 文档和使用示例请参考 [文档](docs/)。
