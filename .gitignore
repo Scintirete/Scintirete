@@ -31,8 +31,8 @@ go.work.sum
 # .idea/
 # .vscode/
 
-scintirete-server
-scintirete-cli
+# scintirete-server
+# scintirete-cli
 bin/scintirete-cli
 bin/scintirete-server
 data/
