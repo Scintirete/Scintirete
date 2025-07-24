@@ -34,17 +34,17 @@ const (
 	massiveDataset = 10000 // Reduced from 1000000
 )
 
-// generateRandomVector creates a random vector of specified dimension
-func generateRandomVector(id string, dimension int) types.Vector {
+// generateRandomVector creates a random vector of specified dimension with a given ID
+func generateRandomVector(id uint64, dimension int) types.Vector {
 	vector := make([]float32, dimension)
 	for i := range vector {
 		vector[i] = rand.Float32()*2 - 1 // Random values between -1 and 1
 	}
 
 	return types.Vector{
-		ID:       0, // Will be auto-generated
+		ID:       id,
 		Elements: vector,
-		Metadata: map[string]interface{}{"benchmark": true, "name": id},
+		Metadata: map[string]interface{}{"benchmark": true, "id": id},
 	}
 }
 
@@ -52,7 +52,7 @@ func generateRandomVector(id string, dimension int) types.Vector {
 func generateTestVectors(count int, dimension int) []types.Vector {
 	vectors := make([]types.Vector, count)
 	for i := 0; i < count; i++ {
-		vectors[i] = generateRandomVector(fmt.Sprintf("vec_%d", i), dimension)
+		vectors[i] = generateRandomVector(uint64(i+1), dimension) // Start from ID 1
 	}
 	return vectors
 }
@@ -104,9 +104,11 @@ func BenchmarkHNSWInsert(b *testing.B) {
 			ctx := context.Background()
 
 			// Generate vectors for insertion with different IDs to avoid conflicts
+			// Start from a high ID to avoid conflicts with pre-populated vectors
+			startID := uint64(tc.vectorCount + 1000000) // Large offset to avoid conflicts
 			insertVectors := make([]types.Vector, b.N)
 			for i := 0; i < b.N; i++ {
-				insertVectors[i] = generateRandomVector(fmt.Sprintf("insert_%d", i), testDimensions)
+				insertVectors[i] = generateRandomVector(startID+uint64(i), testDimensions)
 			}
 
 			b.ResetTimer()
@@ -201,12 +203,14 @@ func BenchmarkHNSWBatchInsert(b *testing.B) {
 			ctx := context.Background()
 
 			// Generate batches for insertion with unique IDs to avoid conflicts
+			// Start from a high ID to avoid conflicts with pre-populated vectors
+			startID := uint64(smallDataset + 1000000) // Large offset to avoid conflicts
 			batches := make([][]types.Vector, b.N)
 			vectorCount := 0
 			for i := 0; i < b.N; i++ {
 				batches[i] = make([]types.Vector, batchSize)
 				for j := 0; j < batchSize; j++ {
-					batches[i][j] = generateRandomVector(fmt.Sprintf("batch_%d_%d", i, j), testDimensions)
+					batches[i][j] = generateRandomVector(startID+uint64(vectorCount), testDimensions)
 					vectorCount++
 				}
 			}

@@ -18,7 +18,7 @@ Scintirete is a lightweight, production-ready vector database built on the HNSW 
 - **High Performance**: In-memory HNSW graph indexing provides millisecond-level nearest neighbor search
 - **Data Safety**: Redis-like AOF + RDB persistence mechanism ensures data durability
 - **Modern APIs**: Native support for both gRPC and HTTP/JSON interfaces for seamless integration
-- **Production Ready**: Structured logging, Prometheus metrics, and comprehensive CLI tools designed for production environments
+- **Production Ready**: Structured logging, audit logs, Prometheus metrics, and comprehensive CLI tools designed for production environments
 - **Cross-platform**: Support Linux, macOS, Windows, arm64, amd64 architectures out of the box
 - **Support Text Embedding**: Support OpenAI-compatible API integration, support automatic text vectorization
 
@@ -149,7 +149,7 @@ Scintirete implements a modern vector database architecture with the following c
 - **Persistence Layer**: Dual-mode persistence with AOF (real-time) and RDB (snapshot) strategies
 - **API Layer**: Dual protocol support with gRPC for performance and HTTP/JSON for accessibility
 - **Embedding Integration**: OpenAI-compatible API integration for automatic text vectorization
-- **Observability**: Comprehensive logging, metrics, and audit trails
+- **Observability**: Comprehensive logging, audit logs, and metrics
 
 For detailed technical documentation, see the [docs/](docs/) directory.
 
