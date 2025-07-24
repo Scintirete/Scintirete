@@ -292,7 +292,7 @@ func (s *Server) EmbedAndInsert(ctx context.Context, req *pb.EmbedAndInsertReque
 	}
 
 	// Get embedding model (use default if not specified)
-	model := "text-embedding-ada-002" // Default model
+	model := s.embedding.GetDefaultModel() // Use configured default model
 	if req.EmbeddingModel != nil {
 		model = *req.EmbeddingModel
 	}
@@ -384,7 +384,7 @@ func (s *Server) EmbedAndSearch(ctx context.Context, req *pb.EmbedAndSearchReque
 	}
 
 	// Get embedding model (use default if not specified)
-	model := "text-embedding-ada-002" // Default model
+	model := s.embedding.GetDefaultModel() // Use configured default model
 	if req.EmbeddingModel != nil {
 		model = *req.EmbeddingModel
 	}
@@ -515,31 +515,21 @@ func (s *Server) ListEmbeddingModels(ctx context.Context, req *pb.ListEmbeddingM
 		return nil, err
 	}
 
-	// Return commonly used embedding models (hardcoded for now)
-	models := []*pb.EmbeddingModel{
-		{
-			Id:          "text-embedding-ada-002",
-			Name:        "OpenAI Ada v2",
-			Dimension:   1536,
-			Available:   true,
-			Description: "OpenAI's most capable embedding model",
-		},
-		{
-			Id:          "text-embedding-3-small",
-			Name:        "OpenAI Text Embedding 3 Small",
-			Dimension:   1536,
-			Available:   true,
-			Description: "Smaller, faster embedding model",
-		},
-		{
-			Id:          "text-embedding-3-large",
-			Name:        "OpenAI Text Embedding 3 Large",
-			Dimension:   3072,
-			Available:   true,
-			Description: "Larger, more capable embedding model",
-		},
+	// Get models from embedding client config
+	embeddingModels := s.embedding.GetModels()
+	defaultModel := s.embedding.GetDefaultModel()
+
+	// Convert to protobuf format
+	models := make([]*pb.EmbeddingModel, len(embeddingModels))
+	for i, model := range embeddingModels {
+		models[i] = &pb.EmbeddingModel{
+			Id:          model.ID,
+			Name:        model.Name,
+			Dimension:   int32(model.Dimension),
+			Available:   model.Available,
+			Description: model.Description,
+		}
 	}
-	defaultModel := "text-embedding-ada-002"
 
 	s.updateRequestStats()
 	return &pb.ListEmbeddingModelsResponse{

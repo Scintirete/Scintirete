@@ -88,17 +88,17 @@ func setupTestData(t *testing.T, srv *Server) {
 
 	vectors := []*pb.Vector{
 		{
-			Id:       "vec1",
+			Id:       1,
 			Elements: []float32{1.0, 0.0, 0.0},
 			Metadata: metadata1,
 		},
 		{
-			Id:       "vec2",
+			Id:       2,
 			Elements: []float32{0.0, 1.0, 0.0},
 			Metadata: metadata2,
 		},
 		{
-			Id:       "vec3",
+			Id:       3,
 			Elements: []float32{0.0, 0.0, 1.0},
 			Metadata: metadata3,
 		},
@@ -168,8 +168,8 @@ func TestSearch_WithIncludeVector(t *testing.T) {
 			result := resp.Results[0] // Check the first result
 
 			// Verify that result always has ID and metadata
-			if result.Id == "" {
-				t.Error("Result ID should never be empty")
+			if result.Id == 0 {
+				t.Error("Result ID should never be zero")
 			}
 			if result.Metadata == nil {
 				t.Error("Result metadata should never be nil")
@@ -180,8 +180,8 @@ func TestSearch_WithIncludeVector(t *testing.T) {
 				t.Error("Vector object should always be present")
 			} else {
 				// Verify vector ID and metadata are always present
-				if result.Vector.Id == "" {
-					t.Error("Vector ID should never be empty")
+				if result.Vector.Id == 0 {
+					t.Error("Vector ID should never be zero")
 				}
 				if result.Vector.Metadata == nil {
 					t.Error("Vector metadata should never be nil")
@@ -472,7 +472,7 @@ func TestEmbedAndInsertAOFLogging(t *testing.T) {
 		CollectionName: collName,
 		Texts: []*pb.TextWithMetadata{
 			{
-				Id:   "test1",
+				Id:   func() *uint64 { id := uint64(1); return &id }(),
 				Text: "test text for embedding",
 			},
 		},
@@ -559,7 +559,7 @@ func TestAOFRecoveryWithBasicCommands(t *testing.T) {
 		CollectionName: collName,
 		Vectors: []*pb.Vector{
 			{
-				Id:       "vec1",
+				Id:       1,
 				Elements: []float32{1.0, 2.0, 3.0},
 			},
 		},
@@ -674,7 +674,7 @@ func TestAuditLogging(t *testing.T) {
 		CollectionName: collName,
 		Vectors: []*pb.Vector{
 			{
-				Id:       "audit_vec1",
+				Id:       1,
 				Elements: []float32{1.0, 2.0, 3.0},
 			},
 		},
@@ -688,7 +688,7 @@ func TestAuditLogging(t *testing.T) {
 		Auth:           auth,
 		DbName:         dbName,
 		CollectionName: collName,
-		Ids:            []string{"audit_vec1"},
+		Ids:            []uint64{1},
 	})
 	if err != nil {
 		t.Fatalf("Failed to delete vectors: %v", err)

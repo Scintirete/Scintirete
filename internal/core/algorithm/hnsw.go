@@ -2,6 +2,7 @@ package algorithm
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"sync"
@@ -13,20 +14,20 @@ import (
 
 // HNSWNode represents a node in the HNSW graph
 type HNSWNode struct {
-	ID       string                 // Vector ID
+	ID       uint64                 // Vector ID
 	Vector   []float32              // Vector data
 	Metadata map[string]interface{} // Associated metadata
 	Deleted  bool                   // Soft delete flag
 
 	// Connections at each layer: layer -> set of connected node IDs
-	Connections []map[string]struct{}
+	Connections []map[uint64]struct{}
 }
 
 // NewHNSWNode creates a new HNSW node
-func NewHNSWNode(id string, vector []float32, metadata map[string]interface{}, maxLayers int) *HNSWNode {
-	connections := make([]map[string]struct{}, maxLayers)
+func NewHNSWNode(id uint64, vector []float32, metadata map[string]interface{}, maxLayers int) *HNSWNode {
+	connections := make([]map[uint64]struct{}, maxLayers)
 	for i := range connections {
-		connections[i] = make(map[string]struct{})
+		connections[i] = make(map[uint64]struct{})
 	}
 
 	return &HNSWNode{
@@ -39,22 +40,22 @@ func NewHNSWNode(id string, vector []float32, metadata map[string]interface{}, m
 }
 
 // GetConnections returns the connections at a specific layer
-func (n *HNSWNode) GetConnections(layer int) map[string]struct{} {
+func (n *HNSWNode) GetConnections(layer int) map[uint64]struct{} {
 	if layer >= len(n.Connections) {
-		return make(map[string]struct{})
+		return make(map[uint64]struct{})
 	}
 	return n.Connections[layer]
 }
 
 // AddConnection adds a connection at a specific layer
-func (n *HNSWNode) AddConnection(layer int, nodeID string) {
+func (n *HNSWNode) AddConnection(layer int, nodeID uint64) {
 	if layer < len(n.Connections) {
 		n.Connections[layer][nodeID] = struct{}{}
 	}
 }
 
 // RemoveConnection removes a connection at a specific layer
-func (n *HNSWNode) RemoveConnection(layer int, nodeID string) {
+func (n *HNSWNode) RemoveConnection(layer int, nodeID uint64) {
 	if layer < len(n.Connections) {
 		delete(n.Connections[layer], nodeID)
 	}
@@ -69,8 +70,8 @@ type HNSW struct {
 
 	// Graph data
 	mu         sync.RWMutex
-	nodes      map[string]*HNSWNode // All nodes indexed by ID
-	entrypoint string               // ID of the entry point node
+	nodes      map[uint64]*HNSWNode // All nodes indexed by ID
+	entrypoint uint64               // ID of the entry point node
 	maxLayer   int                  // Current maximum layer
 
 	// Statistics
@@ -92,8 +93,8 @@ func NewHNSW(params types.HNSWParams, metric types.DistanceMetric) (core.HNSWInd
 		params:      params,
 		metric:      metric,
 		distCalc:    distCalc,
-		nodes:       make(map[string]*HNSWNode),
-		entrypoint:  "",
+		nodes:       make(map[uint64]*HNSWNode),
+		entrypoint:  0,
 		maxLayer:    -1,
 		size:        0,
 		memoryUsage: 0,
@@ -107,15 +108,15 @@ func (h *HNSW) Build(ctx context.Context, vectors []types.Vector) error {
 	defer h.mu.Unlock()
 
 	// Clear existing data
-	h.nodes = make(map[string]*HNSWNode)
-	h.entrypoint = ""
+	h.nodes = make(map[uint64]*HNSWNode)
+	h.entrypoint = 0
 	h.maxLayer = -1
 	h.size = 0
 
 	// Insert vectors one by one
 	for _, vector := range vectors {
 		if err := h.insertVector(vector); err != nil {
-			return utils.ErrIndexBuildFailed("failed to insert vector "+vector.ID).WithContext("cause", err.Error())
+			return utils.ErrIndexBuildFailed(fmt.Sprintf("failed to insert vector %d", vector.ID)).WithContext("cause", err.Error())
 		}
 
 		// Check for context cancellation
@@ -136,7 +137,7 @@ func (h *HNSW) Insert(ctx context.Context, vector types.Vector) error {
 	defer h.mu.Unlock()
 
 	if err := h.insertVector(vector); err != nil {
-		return utils.ErrInsertFailed("failed to insert vector "+vector.ID).WithContext("cause", err.Error())
+		return utils.ErrInsertFailed(fmt.Sprintf("failed to insert vector %d", vector.ID)).WithContext("cause", err.Error())
 	}
 
 	h.updateMemoryUsage()
@@ -147,7 +148,7 @@ func (h *HNSW) Insert(ctx context.Context, vector types.Vector) error {
 func (h *HNSW) insertVector(vector types.Vector) error {
 	// Check if vector already exists
 	if _, exists := h.nodes[vector.ID]; exists {
-		return utils.ErrInvalidParameters("vector with ID '" + vector.ID + "' already exists")
+		return utils.ErrInvalidParameters(fmt.Sprintf("vector with ID %d already exists", vector.ID))
 	}
 
 	// Determine the layer for this node
@@ -164,13 +165,13 @@ func (h *HNSW) insertVector(vector types.Vector) error {
 	}
 
 	// If this is the first node, make it the entry point
-	if h.entrypoint == "" {
+	if h.entrypoint == 0 {
 		h.entrypoint = vector.ID
 		return nil
 	}
 
 	// Find entry points for each layer and build connections
-	entryPoints := []string{h.entrypoint}
+	entryPoints := []uint64{h.entrypoint}
 
 	// Search from top layer down to target layer + 1
 	for lc := h.maxLayer; lc > layer; lc-- {
@@ -218,7 +219,13 @@ func (h *HNSW) Delete(ctx context.Context, id string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	node, exists := h.nodes[id]
+	// Convert string ID to uint64
+	var vectorID uint64
+	if _, err := fmt.Sscanf(id, "%d", &vectorID); err != nil {
+		return utils.ErrInvalidParameters(fmt.Sprintf("invalid ID format: %s", id))
+	}
+
+	node, exists := h.nodes[vectorID]
 	if !exists {
 		return utils.ErrVectorNotFound(id)
 	}
@@ -231,7 +238,7 @@ func (h *HNSW) Delete(ctx context.Context, id string) error {
 	h.size--
 
 	// If this was the entry point, find a new one
-	if h.entrypoint == id {
+	if h.entrypoint == vectorID {
 		h.findNewEntrypoint()
 	}
 
@@ -244,7 +251,7 @@ func (h *HNSW) Search(ctx context.Context, query []float32, params types.SearchP
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if h.entrypoint == "" || h.size == 0 {
+	if h.entrypoint == 0 || h.size == 0 {
 		return []types.SearchResult{}, nil
 	}
 
@@ -254,7 +261,7 @@ func (h *HNSW) Search(ctx context.Context, query []float32, params types.SearchP
 	}
 
 	// Start from entry point and search down
-	entryPoints := []string{h.entrypoint}
+	entryPoints := []uint64{h.entrypoint}
 
 	// Search from top layer down to layer 1
 	for lc := h.maxLayer; lc > 0; lc-- {
@@ -305,7 +312,13 @@ func (h *HNSW) Get(ctx context.Context, id string) (*types.Vector, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	node, exists := h.nodes[id]
+	// Convert string ID to uint64
+	var vectorID uint64
+	if _, err := fmt.Sscanf(id, "%d", &vectorID); err != nil {
+		return nil, utils.ErrInvalidParameters(fmt.Sprintf("invalid ID format: %s", id))
+	}
+
+	node, exists := h.nodes[vectorID]
 	if !exists || node.Deleted {
 		return nil, utils.ErrVectorNotFound(id)
 	}
@@ -414,7 +427,7 @@ func (h *HNSW) selectLayer() int {
 }
 
 // getNodeLayer returns the highest layer of a node
-func (h *HNSW) getNodeLayer(nodeID string) int {
+func (h *HNSW) getNodeLayer(nodeID uint64) int {
 	node, exists := h.nodes[nodeID]
 	if !exists {
 		return -1
@@ -429,8 +442,8 @@ func (h *HNSW) getNodeLayer(nodeID string) int {
 }
 
 // searchLayer performs greedy search in a specific layer
-func (h *HNSW) searchLayer(query []float32, entryPoints []string, numClosest int, layer int) []string {
-	visited := make(map[string]struct{})
+func (h *HNSW) searchLayer(query []float32, entryPoints []uint64, numClosest int, layer int) []uint64 {
+	visited := make(map[uint64]struct{})
 	candidates := make([]CandidateItem, 0)
 
 	// Initialize with entry points
@@ -443,7 +456,7 @@ func (h *HNSW) searchLayer(query []float32, entryPoints []string, numClosest int
 	}
 
 	if len(candidates) == 0 {
-		return []string{}
+		return []uint64{}
 	}
 
 	// Sort candidates by distance
@@ -493,7 +506,7 @@ func (h *HNSW) searchLayer(query []float32, entryPoints []string, numClosest int
 	}
 
 	// Extract IDs
-	result := make([]string, min(numClosest, len(candidates)))
+	result := make([]uint64, min(numClosest, len(candidates)))
 	for i := range result {
 		result[i] = candidates[i].ID
 	}
@@ -502,7 +515,7 @@ func (h *HNSW) searchLayer(query []float32, entryPoints []string, numClosest int
 }
 
 // selectNeighbors selects the best neighbors using a simple heuristic
-func (h *HNSW) selectNeighbors(query []float32, candidates []string, maxConnections int) []string {
+func (h *HNSW) selectNeighbors(query []float32, candidates []uint64, maxConnections int) []uint64 {
 	if len(candidates) <= maxConnections {
 		return candidates
 	}
@@ -519,7 +532,7 @@ func (h *HNSW) selectNeighbors(query []float32, candidates []string, maxConnecti
 	h.sortCandidates(items)
 
 	// Return top maxConnections
-	result := make([]string, maxConnections)
+	result := make([]uint64, maxConnections)
 	for i := 0; i < maxConnections; i++ {
 		result[i] = items[i].ID
 	}
@@ -552,7 +565,7 @@ func (h *HNSW) pruneConnections(node *HNSWNode, layer int) {
 	h.sortCandidates(candidates)
 
 	// Clear connections and re-add the selected ones
-	node.Connections[layer] = make(map[string]struct{})
+	node.Connections[layer] = make(map[uint64]struct{})
 	for i := 0; i < min(maxConnections, len(candidates)); i++ {
 		node.AddConnection(layer, candidates[i].ID)
 	}
@@ -560,7 +573,7 @@ func (h *HNSW) pruneConnections(node *HNSWNode, layer int) {
 
 // findNewEntrypoint finds a new entry point when the current one is deleted
 func (h *HNSW) findNewEntrypoint() {
-	h.entrypoint = ""
+	h.entrypoint = 0
 	maxLayerFound := -1
 
 	for nodeID, node := range h.nodes {
@@ -586,8 +599,8 @@ func (h *HNSW) updateMemoryUsage() {
 		// Vector data
 		usage += int64(len(node.Vector) * 4) // 4 bytes per float32
 
-		// ID string
-		usage += int64(len(node.ID))
+		// ID (8 bytes for uint64)
+		usage += 8
 
 		// Connections
 		for _, connections := range node.Connections {
@@ -603,7 +616,7 @@ func (h *HNSW) updateMemoryUsage() {
 
 // CandidateItem represents a candidate node with its distance
 type CandidateItem struct {
-	ID       string
+	ID       uint64
 	Distance float32
 }
 

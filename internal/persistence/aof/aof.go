@@ -514,7 +514,7 @@ func (a *AOFLogger) createVector(builder *flatbuffers.Builder, vector types.Vect
 		metadataStr = builder.CreateString("{}")
 	}
 
-	idStr := builder.CreateString(vector.ID)
+	idStr := builder.CreateString(fmt.Sprintf("%d", vector.ID))
 
 	fbaof.VectorStart(builder)
 	fbaof.VectorAddId(builder, idStr)
@@ -628,8 +628,15 @@ func (a *AOFLogger) parseCommandArgs(command *types.AOFCommand, argsTable *flatb
 					elements[j] = vector.Elements(j)
 				}
 
+				// Convert string ID to uint64
+				var vectorID uint64
+				if _, err := fmt.Sscanf(string(vector.Id()), "%d", &vectorID); err != nil {
+					// Handle error - skip this vector or log error
+					continue
+				}
+
 				vectors[i] = types.Vector{
-					ID:       string(vector.Id()),
+					ID:       vectorID,
 					Elements: elements,
 					// Note: Metadata parsing could be enhanced for JSON
 					Metadata: nil,

@@ -56,12 +56,12 @@ func TestAOFLogger_WriteAndReplay(t *testing.T) {
 			Args: map[string]interface{}{
 				"vectors": []types.Vector{
 					{
-						ID:       "vector1",
+						ID:       1,
 						Elements: []float32{1.0, 2.0, 3.0},
 						Metadata: map[string]interface{}{"label": "test"},
 					},
 					{
-						ID:       "vector2",
+						ID:       2,
 						Elements: []float32{4.0, 5.0, 6.0},
 						Metadata: map[string]interface{}{"label": "test2"},
 					},

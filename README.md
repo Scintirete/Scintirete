@@ -6,33 +6,11 @@
 
 ![](logo.jpeg)
 
-[中文文档](README_ZH.md) | [Documentation](docs/)
+[中文文档](README_ZH.md)
 
 Scintirete is a lightweight, production-ready vector database built on the HNSW (Hierarchical Navigable Small World) algorithm. The name derives from Latin words "Scintilla" (spark) and "Rete" (network), symbolizing a sparkling network that illuminates the crucial connections within complex data landscapes through deep similarity matching.
 
 **Core Philosophy:** Discover infinite neighbors, illuminate the data network.
-
-## ✨ Key Highlights
-
-### 🚀 **High Performance**
-- **Sub-millisecond search**: 0.8ms for 10K vectors  
-- **Fast insertions**: 6-7ms per vector insertion with HNSW indexing
-- **Redis-like persistence**: High-efficiency AOF + RDB implementation using FlatBuffers
-
-### 🪶 **Lightweight & Cross-Platform**  
-- **Single binary deployment**: No external dependencies, runs anywhere
-- **Minimal resource footprint**: Memory-efficient HNSW graph structure
-- **Cross-platform support**: Linux, macOS, Windows ready
-
-### ⚡ **Simple Deployment**
-- **Zero configuration**: Works out-of-the-box with sensible defaults
-- **Docker ready**: One-command deployment with docker-compose
-- **Multiple interfaces**: Native gRPC + HTTP/JSON APIs
-
-### 🔧 **Production Ready**
-- **Data safety**: Dual persistence (AOF real-time + RDB snapshots)
-- **Observability**: Structured logging, Prometheus metrics, audit trails
-- **Modern architecture**: Built with Go for reliability and performance
 
 ## Features
 
@@ -41,6 +19,8 @@ Scintirete is a lightweight, production-ready vector database built on the HNSW 
 - **Data Safety**: Redis-like AOF + RDB persistence mechanism ensures data durability
 - **Modern APIs**: Native support for both gRPC and HTTP/JSON interfaces for seamless integration
 - **Production Ready**: Structured logging, Prometheus metrics, and comprehensive CLI tools designed for production environments
+- **Cross-platform**: Support Linux, macOS, Windows, arm64, amd64 architectures out of the box
+- **Support Text Embedding**: Support OpenAI-compatible API integration, support automatic text vectorization
 
 Scintirete targets small to medium-scale projects, edge computing scenarios, and developers who need rapid prototyping with a reliable, high-performance, and maintainable vector search solution.
 
@@ -158,6 +138,8 @@ If you have pre-computed vectors:
   --vector '[0.15, 0.25, 0.35, 0.45]' \
   --top-k 3
 ```
+
+More documentation can be found in the [docs/](docs/) directory.
 
 ## Architecture
 

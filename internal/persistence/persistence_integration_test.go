@@ -3,6 +3,7 @@ package persistence
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/scintirete/scintirete/internal/core/database"
@@ -58,12 +59,12 @@ func TestAOFRecoveryWithDatabaseEngine(t *testing.T) {
 	// Insert some test vectors
 	testVectors := []types.Vector{
 		{
-			ID:       "vec1",
+			ID:       1,
 			Elements: []float32{1.0, 2.0, 3.0},
 			Metadata: map[string]interface{}{"category": "test"},
 		},
 		{
-			ID:       "vec2",
+			ID:       2,
 			Elements: []float32{4.0, 5.0, 6.0},
 			Metadata: map[string]interface{}{"category": "test"},
 		},
@@ -153,25 +154,25 @@ func TestAOFRecoveryWithDatabaseEngine(t *testing.T) {
 
 	// Check that we can retrieve the vectors
 	for _, expectedVector := range testVectors {
-		retrievedVector, err := collection.Get(ctx, expectedVector.ID)
+		retrievedVector, err := collection.Get(ctx, fmt.Sprintf("%d", expectedVector.ID))
 		if err != nil {
-			t.Errorf("Failed to retrieve vector %s: %v", expectedVector.ID, err)
+			t.Errorf("Failed to retrieve vector %d: %v", expectedVector.ID, err)
 			continue
 		}
 
 		if retrievedVector.ID != expectedVector.ID {
-			t.Errorf("Vector ID mismatch: expected %s, got %s", expectedVector.ID, retrievedVector.ID)
+			t.Errorf("Vector ID mismatch: expected %d, got %d", expectedVector.ID, retrievedVector.ID)
 		}
 
 		if len(retrievedVector.Elements) != len(expectedVector.Elements) {
-			t.Errorf("Vector %s element count mismatch: expected %d, got %d",
+			t.Errorf("Vector %d element count mismatch: expected %d, got %d",
 				expectedVector.ID, len(expectedVector.Elements), len(retrievedVector.Elements))
 			continue
 		}
 
 		for i, expectedVal := range expectedVector.Elements {
 			if retrievedVector.Elements[i] != expectedVal {
-				t.Errorf("Vector %s element[%d] mismatch: expected %f, got %f",
+				t.Errorf("Vector %d element[%d] mismatch: expected %f, got %f",
 					expectedVector.ID, i, expectedVal, retrievedVector.Elements[i])
 			}
 		}

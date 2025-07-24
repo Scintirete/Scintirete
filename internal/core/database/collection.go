@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,8 +19,8 @@ type Collection struct {
 	mu         sync.RWMutex
 	name       string
 	config     types.CollectionConfig
-	vectors    map[string]*types.Vector // vector ID -> vector
-	deletedIDs map[string]bool          // soft deletion tracking
+	vectors    map[uint64]*types.Vector // vector ID -> vector
+	deletedIDs map[uint64]bool          // soft deletion tracking
 	index      core.VectorIndex
 	createdAt  time.Time
 	updatedAt  time.Time
@@ -46,25 +47,20 @@ func NewCollection(name string, config types.CollectionConfig) (*Collection, err
 	collection := &Collection{
 		name:       name,
 		config:     config,
-		vectors:    make(map[string]*types.Vector),
-		deletedIDs: make(map[string]bool),
+		vectors:    make(map[uint64]*types.Vector),
+		deletedIDs: make(map[uint64]bool),
 		createdAt:  now,
 		updatedAt:  now,
 	}
 
+	// Create index based on configuration
+	index, err := algorithm.NewHNSW(config.HNSWParams, config.Metric)
+	if err != nil {
+		return nil, utils.ErrInvalidInput("failed to create HNSW index: " + err.Error())
+	}
+
+	collection.index = index
 	return collection, nil
-}
-
-// GetName returns the collection name
-func (c *Collection) GetName() string {
-	return c.name
-}
-
-// GetConfig returns the collection configuration
-func (c *Collection) GetConfig() types.CollectionConfig {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.config
 }
 
 // Insert adds vectors to the collection
@@ -76,24 +72,24 @@ func (c *Collection) Insert(ctx context.Context, vectors []types.Vector) error {
 		return utils.ErrInvalidInput("no vectors provided")
 	}
 
-	// Initialize index on first insertion
-	if len(c.vectors) == 0 && len(vectors) > 0 {
-		dimension := len(vectors[0].Elements)
-		if err := c.initializeIndex(dimension); err != nil {
-			return utils.ErrCollectionOperationFailed("failed to initialize index: " + err.Error())
+	// Validate dimensions
+	if c.vectorCount > 0 {
+		// Existing collection - check dimensions match
+		expectedDim := c.config.HNSWParams.EfConstruction // This should be dimension, but let's check first vector
+		if len(c.vectors) > 0 {
+			for _, existingVector := range c.vectors {
+				expectedDim = len(existingVector.Elements)
+				break
+			}
 		}
-	}
 
-	// Validate vector dimensions (only if we have existing vectors or this is not the first insertion)
-	expectedDim := c.getDimension()
-	if expectedDim > 0 {
 		for i, vector := range vectors {
 			if len(vector.Elements) != expectedDim {
 				return utils.ErrInvalidVectorDimension(fmt.Sprintf("vector[%d] has dimension %d, expected %d",
 					i, len(vector.Elements), expectedDim))
 			}
 
-			if vector.ID == "" {
+			if vector.ID == 0 {
 				return utils.ErrInvalidInput(fmt.Sprintf("vector[%d] has empty ID", i))
 			}
 		}
@@ -107,7 +103,7 @@ func (c *Collection) Insert(ctx context.Context, vectors []types.Vector) error {
 						i, len(vector.Elements), firstDim))
 				}
 
-				if vector.ID == "" {
+				if vector.ID == 0 {
 					return utils.ErrInvalidInput(fmt.Sprintf("vector[%d] has empty ID", i))
 				}
 			}
@@ -160,7 +156,7 @@ func (c *Collection) Insert(ctx context.Context, vectors []types.Vector) error {
 	return nil
 }
 
-// Delete marks vectors as deleted (soft deletion)
+// Delete marks vectors as deleted by their IDs
 func (c *Collection) Delete(ctx context.Context, ids []string) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -170,7 +166,13 @@ func (c *Collection) Delete(ctx context.Context, ids []string) (int, error) {
 	}
 
 	var deletedCount int
-	for _, id := range ids {
+	for _, idStr := range ids {
+		// Convert string ID to uint64
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			continue // Skip invalid IDs
+		}
+
 		if _, exists := c.vectors[id]; !exists {
 			continue // Skip non-existent vectors
 		}
@@ -182,54 +184,43 @@ func (c *Collection) Delete(ctx context.Context, ids []string) (int, error) {
 
 			// Remove from index
 			if c.index != nil {
-				if err := c.index.Delete(ctx, id); err != nil {
+				if err := c.index.Delete(ctx, idStr); err != nil {
 					return deletedCount, utils.ErrIndexOperationFailed("failed to delete from index: " + err.Error())
 				}
 			}
 		}
 	}
 
-	if deletedCount > 0 {
-		c.updatedAt = time.Now()
-		c.updateMemoryUsage()
-	}
+	c.updatedAt = time.Now()
+	c.updateMemoryUsage()
 
 	return deletedCount, nil
 }
 
-// Search performs vector similarity search
-func (c *Collection) Search(ctx context.Context, queryVector []float32, params types.SearchParams) ([]types.SearchResult, error) {
+// Search finds the most similar vectors to the query
+func (c *Collection) Search(ctx context.Context, query []float32, params types.SearchParams) ([]types.SearchResult, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	if c.index == nil {
-		return nil, utils.ErrCollectionEmpty("collection has no index")
+		return nil, utils.ErrInvalidInput("index not initialized")
 	}
 
-	// Validate query vector dimension
-	expectedDim := c.getDimension()
-	if len(queryVector) != expectedDim {
-		return nil, utils.ErrInvalidVectorDimension(fmt.Sprintf("query vector has dimension %d, expected %d",
-			len(queryVector), expectedDim))
-	}
-
-	// Perform index search
-	indexResults, err := c.index.Search(ctx, queryVector, params)
+	// Perform search using the index
+	results, err := c.index.Search(ctx, query, params)
 	if err != nil {
-		return nil, utils.ErrSearchFailed("index search failed: " + err.Error())
+		return nil, err
 	}
 
-	// The index already returns the correct format
-	results := make([]types.SearchResult, 0, len(indexResults))
-	for _, result := range indexResults {
-		// Check if vector is deleted
-		if c.deletedIDs[result.Vector.ID] {
-			continue // Skip deleted vectors
+	// Filter out deleted vectors
+	var filteredResults []types.SearchResult
+	for _, result := range results {
+		if !c.deletedIDs[result.Vector.ID] {
+			filteredResults = append(filteredResults, result)
 		}
-		results = append(results, result)
 	}
 
-	return results, nil
+	return filteredResults, nil
 }
 
 // Get retrieves a vector by ID
@@ -237,12 +228,18 @@ func (c *Collection) Get(ctx context.Context, id string) (*types.Vector, error) 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	vector, exists := c.vectors[id]
+	// Convert string ID to uint64
+	vectorID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		return nil, utils.ErrInvalidParameters(fmt.Sprintf("invalid ID format: %s", id))
+	}
+
+	vector, exists := c.vectors[vectorID]
 	if !exists {
 		return nil, utils.ErrVectorNotFound(id)
 	}
 
-	if c.deletedIDs[id] {
+	if c.deletedIDs[vectorID] {
 		return nil, utils.ErrVectorNotFound(id)
 	}
 
@@ -260,84 +257,6 @@ func (c *Collection) Get(ctx context.Context, id string) (*types.Vector, error) 
 	return &vectorCopy, nil
 }
 
-// Info returns collection metadata
-func (c *Collection) Info() types.CollectionInfo {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	var dimension int
-	if len(c.vectors) > 0 {
-		// Get dimension from first vector
-		for _, vector := range c.vectors {
-			dimension = len(vector.Elements)
-			break
-		}
-	}
-
-	return types.CollectionInfo{
-		Name:         c.name,
-		Dimension:    dimension,
-		VectorCount:  c.vectorCount - c.deletedCount,
-		DeletedCount: c.deletedCount,
-		MemoryBytes:  c.memoryBytes,
-		MetricType:   c.config.Metric,
-		HNSWConfig:   c.config.HNSWParams,
-		CreatedAt:    c.createdAt,
-		UpdatedAt:    c.updatedAt,
-	}
-}
-
-// Compact removes soft-deleted vectors permanently
-func (c *Collection) Compact(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.deletedCount == 0 {
-		return nil // Nothing to compact
-	}
-
-	// Remove deleted vectors from storage
-	for id := range c.deletedIDs {
-		delete(c.vectors, id)
-	}
-
-	// Clear deleted IDs
-	c.deletedIDs = make(map[string]bool)
-	c.deletedCount = 0
-	c.vectorCount = int64(len(c.vectors))
-	c.updatedAt = time.Now()
-	c.updateMemoryUsage()
-
-	// Rebuild index after compaction
-	if err := c.rebuildIndex(ctx); err != nil {
-		return utils.ErrCollectionOperationFailed("failed to rebuild index after compaction: " + err.Error())
-	}
-
-	return nil
-}
-
-// Close closes the collection and cleans up resources
-func (c *Collection) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Close index if it exists
-	if c.index != nil {
-		if closer, ok := c.index.(interface{ Close() error }); ok {
-			if err := closer.Close(); err != nil {
-				return fmt.Errorf("failed to close index: %w", err)
-			}
-		}
-	}
-
-	// Clear data to help with GC
-	c.vectors = nil
-	c.deletedIDs = nil
-	c.index = nil
-
-	return nil
-}
-
 // Count returns the total number of vectors in the collection (excluding deleted)
 func (c *Collection) Count(ctx context.Context) (int64, error) {
 	c.mu.RLock()
@@ -352,7 +271,13 @@ func (c *Collection) GetMultiple(ctx context.Context, ids []string) ([]types.Vec
 	defer c.mu.RUnlock()
 
 	var results []types.Vector
-	for _, id := range ids {
+	for _, idStr := range ids {
+		// Convert string ID to uint64
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			continue // Skip invalid IDs
+		}
+
 		vector, exists := c.vectors[id]
 		if !exists || c.deletedIDs[id] {
 			continue // Skip deleted or non-existent vectors
@@ -374,53 +299,93 @@ func (c *Collection) GetMultiple(ctx context.Context, ids []string) ([]types.Vec
 	return results, nil
 }
 
-// Private methods
+// Compact removes deleted vectors and rebuilds the index
+func (c *Collection) Compact(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-// initializeIndex creates and initializes the vector index
-func (c *Collection) initializeIndex(dimension int) error {
+	// Remove deleted vectors from memory
+	for id := range c.deletedIDs {
+		delete(c.vectors, id)
+	}
+
+	// Clear deleted IDs
+	c.deletedIDs = make(map[uint64]bool)
+	c.deletedCount = 0
+	c.vectorCount = int64(len(c.vectors))
+
+	// Rebuild index if it exists
 	if c.index != nil {
-		return nil // Already initialized
+		vectors := make([]types.Vector, 0, len(c.vectors))
+		for _, vector := range c.vectors {
+			vectors = append(vectors, *vector)
+		}
+
+		if err := c.index.Build(ctx, vectors); err != nil {
+			return utils.ErrIndexOperationFailed("failed to rebuild index: " + err.Error())
+		}
 	}
 
-	// Create HNSW index
-	hnswIndex, err := algorithm.NewHNSW(c.config.HNSWParams, c.config.Metric)
-	if err != nil {
-		return err
-	}
-	c.index = hnswIndex
+	c.updatedAt = time.Now()
+	c.updateMemoryUsage()
 
 	return nil
 }
 
-// getDimension returns the expected vector dimension
-func (c *Collection) getDimension() int {
-	if len(c.vectors) == 0 {
-		return 0
-	}
+// Close releases resources used by the collection
+func (c *Collection) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	// Get dimension from first vector
-	for _, vector := range c.vectors {
-		return len(vector.Elements)
-	}
+	// Clear data structures
+	c.vectors = nil
+	c.deletedIDs = nil
+	c.index = nil
 
-	return 0
+	return nil
 }
 
-// updateMemoryUsage calculates and updates memory usage statistics
+// Info returns metadata about this collection
+func (c *Collection) Info() types.CollectionInfo {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var dimension int
+	if len(c.vectors) > 0 {
+		for _, vector := range c.vectors {
+			dimension = len(vector.Elements)
+			break
+		}
+	}
+
+	return types.CollectionInfo{
+		Name:         c.name,
+		Dimension:    dimension,
+		VectorCount:  c.vectorCount - c.deletedCount,
+		DeletedCount: c.deletedCount,
+		MemoryBytes:  c.memoryBytes,
+		MetricType:   c.config.Metric,
+		HNSWConfig:   c.config.HNSWParams,
+		CreatedAt:    c.createdAt,
+		UpdatedAt:    c.updatedAt,
+	}
+}
+
+// updateMemoryUsage calculates and updates the memory usage estimate
 func (c *Collection) updateMemoryUsage() {
 	// Rough estimation of memory usage
 	var totalBytes int64
 
 	// Vector data
 	for _, vector := range c.vectors {
-		totalBytes += int64(len(vector.ID))            // ID string
+		totalBytes += 8                                // ID (uint64 = 8 bytes)
 		totalBytes += int64(len(vector.Elements) * 4)  // float32 elements
 		totalBytes += int64(len(vector.Metadata) * 32) // rough metadata size
 	}
 
 	// Deleted IDs map
-	for id := range c.deletedIDs {
-		totalBytes += int64(len(id))
+	for range c.deletedIDs {
+		totalBytes += 8 // uint64 = 8 bytes
 	}
 
 	// Index memory (rough estimation)
@@ -433,59 +398,14 @@ func (c *Collection) updateMemoryUsage() {
 	c.memoryBytes = totalBytes
 }
 
-// rebuildIndex rebuilds the vector index from scratch
-func (c *Collection) rebuildIndex(ctx context.Context) error {
-	if len(c.vectors) == 0 {
-		// No vectors to index
-		return nil
-	}
-
-	// Get dimension from first vector
-	expectedDim := c.getDimension()
-	if expectedDim == 0 {
-		return nil // No vectors with valid dimensions
-	}
-
-	// Create new index
-	newIndex, err := algorithm.NewHNSW(c.config.HNSWParams, c.config.Metric)
-	if err != nil {
-		return err
-	}
-
-	// Collect all non-deleted vectors
-	vectors := make([]types.Vector, 0, len(c.vectors))
-	for _, vector := range c.vectors {
-		// Skip deleted vectors
-		if c.deletedIDs[vector.ID] {
-			continue
-		}
-		vectors = append(vectors, *vector)
-	}
-
-	// Build the index with all vectors
-	if len(vectors) > 0 {
-		if err := newIndex.Build(ctx, vectors); err != nil {
-			return err
-		}
-	}
-
-	// Replace the old index
-	c.index = newIndex
-
-	return nil
-}
-
 // validateCollectionConfig validates the collection configuration
 func validateCollectionConfig(config types.CollectionConfig) error {
 	if config.Name == "" {
 		return utils.ErrInvalidInput("collection name cannot be empty")
 	}
 
-	switch config.Metric {
-	case types.DistanceMetricL2, types.DistanceMetricCosine, types.DistanceMetricInnerProduct:
-		// Valid metrics
-	default:
-		return utils.ErrInvalidInput("invalid distance metric")
+	if config.Metric == types.DistanceMetricUnspecified {
+		return utils.ErrInvalidInput("distance metric must be specified")
 	}
 
 	// Validate HNSW parameters

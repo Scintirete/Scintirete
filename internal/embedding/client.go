@@ -26,6 +26,10 @@ type Client struct {
 	rpmCounter *rateCounter
 	tpmCounter *rateCounter
 
+	// Model configuration
+	models       []EmbeddingModel
+	defaultModel string
+
 	mu sync.RWMutex
 }
 
@@ -38,13 +42,24 @@ type rateCounter struct {
 	mu       sync.Mutex
 }
 
+// EmbeddingModel represents an embedding model configuration
+type EmbeddingModel struct {
+	ID          string
+	Name        string
+	Dimension   int
+	Available   bool
+	Description string
+}
+
 // Config contains embedding client configuration
 type Config struct {
-	BaseURL  string
-	APIKey   string
-	RPMLimit int
-	TPMLimit int
-	Timeout  time.Duration
+	BaseURL      string
+	APIKey       string
+	RPMLimit     int
+	TPMLimit     int
+	Timeout      time.Duration
+	Models       []EmbeddingModel
+	DefaultModel string
 }
 
 // NewClient creates a new embedding client
@@ -71,6 +86,8 @@ func NewClient(config Config) (*Client, error) {
 			limit:    config.TPMLimit,
 			duration: time.Minute,
 		},
+		models:       config.Models,
+		defaultModel: config.DefaultModel,
 	}
 
 	return client, nil
@@ -211,12 +228,38 @@ func (c *Client) ConvertTextsToVectors(ctx context.Context, texts []types.TextWi
 	// Convert to vectors
 	vectors := make([]types.Vector, len(texts))
 	for i, text := range texts {
+		var vectorID uint64
+		if text.ID != nil {
+			vectorID = *text.ID
+		} else {
+			// Generate a new ID if not provided
+			vectorID = uint64(i + 1) // Simple fallback - in real implementation might use atomic counter
+		}
+
 		vectors[i] = types.Vector{
-			ID:       text.ID,
+			ID:       vectorID,
 			Elements: embeddingResp.Data[i].Embedding,
 			Metadata: text.Metadata,
 		}
 	}
 
 	return vectors, nil
+}
+
+// GetModels returns the list of available embedding models
+func (c *Client) GetModels() []EmbeddingModel {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Return a copy to prevent external modification
+	models := make([]EmbeddingModel, len(c.models))
+	copy(models, c.models)
+	return models
+}
+
+// GetDefaultModel returns the default embedding model
+func (c *Client) GetDefaultModel() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.defaultModel
 }

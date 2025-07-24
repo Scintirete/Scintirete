@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -759,7 +760,12 @@ func extractSingleVector(vectorInterface interface{}) (types.Vector, error) {
 		var result types.Vector
 
 		if id, ok := vector["id"].(string); ok {
-			result.ID = id
+			// Convert string ID to uint64
+			parsedID, err := strconv.ParseUint(id, 10, 64)
+			if err != nil {
+				return result, fmt.Errorf("invalid id format: %s", id)
+			}
+			result.ID = parsedID
 		} else {
 			return result, fmt.Errorf("missing or invalid id field")
 		}

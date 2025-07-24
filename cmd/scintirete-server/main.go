@@ -18,7 +18,6 @@ import (
 
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 	"github.com/scintirete/scintirete/internal/config"
-	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/server"
 	grpcserver "github.com/scintirete/scintirete/internal/server/grpc"
@@ -66,13 +65,9 @@ func main() {
 			RDBInterval:     5 * time.Minute,
 			AOFRewriteSize:  64 * 1024 * 1024,
 		},
-		EmbeddingConfig: embedding.Config{
-			BaseURL: cfg.Embedding.BaseURL,
-			APIKey:  cfg.Embedding.APIKey,
-			Timeout: 30 * time.Second, // Use default timeout
-		},
-		EnableMetrics:  cfg.Observability.MetricsEnabled,
-		EnableAuditLog: cfg.Log.EnableAuditLog,
+		EmbeddingConfig: cfg.ToEmbeddingConfig(),
+		EnableMetrics:   cfg.Observability.MetricsEnabled,
+		EnableAuditLog:  cfg.Log.EnableAuditLog,
 	}
 
 	// Create gRPC server

@@ -9,6 +9,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/scintirete/scintirete/internal/core"
+	"github.com/scintirete/scintirete/internal/embedding"
 	"github.com/scintirete/scintirete/internal/persistence"
 )
 
@@ -50,10 +51,21 @@ type PersistenceConfig struct {
 
 // EmbeddingConfig contains external embedding service settings.
 type EmbeddingConfig struct {
-	BaseURL  string `toml:"base_url"`
-	APIKey   string `toml:"api_key"`
-	RPMLimit int    `toml:"rpm_limit"`
-	TPMLimit int    `toml:"tpm_limit"`
+	BaseURL      string           `toml:"base_url"`
+	APIKey       string           `toml:"api_key"`
+	RPMLimit     int              `toml:"rpm_limit"`
+	TPMLimit     int              `toml:"tpm_limit"`
+	Models       []EmbeddingModel `toml:"models"`
+	DefaultModel string           `toml:"default_model"`
+}
+
+// EmbeddingModel represents an embedding model configuration
+type EmbeddingModel struct {
+	ID          string `toml:"id"`
+	Name        string `toml:"name"`
+	Dimension   int    `toml:"dimension"`
+	Available   bool   `toml:"available"`
+	Description string `toml:"description"`
 }
 
 // ObservabilityConfig contains metrics and monitoring settings.
@@ -103,6 +115,12 @@ func DefaultConfig() *Config {
 			APIKey:   "",
 			RPMLimit: 3500,
 			TPMLimit: 90000,
+			Models: []EmbeddingModel{
+				{ID: "text-embedding-3-small", Name: "text-embedding-3-small", Dimension: 1536, Available: true, Description: "Small text embedding model"},
+				{ID: "text-embedding-3-base", Name: "text-embedding-3-base", Dimension: 3072, Available: true, Description: "Base text embedding model"},
+				{ID: "text-embedding-3-large", Name: "text-embedding-3-large", Dimension: 4096, Available: true, Description: "Large text embedding model"},
+			},
+			DefaultModel: "text-embedding-3-small",
 		},
 		Observability: ObservabilityConfig{
 			MetricsEnabled: true,
@@ -337,5 +355,29 @@ func (c *Config) ToPersistenceConfig(logger core.Logger) persistence.Config {
 		RDBInterval:     time.Duration(c.Persistence.RDBIntervalMinutes) * time.Minute,
 		AOFRewriteSize:  int64(c.Persistence.AOFRewriteSizeMB) * 1024 * 1024, // Convert MB to bytes
 		Logger:          logger,
+	}
+}
+
+// ToEmbeddingConfig converts config.EmbeddingConfig to embedding.Config
+func (c *Config) ToEmbeddingConfig() embedding.Config {
+	embeddingModels := make([]embedding.EmbeddingModel, len(c.Embedding.Models))
+	for i, model := range c.Embedding.Models {
+		embeddingModels[i] = embedding.EmbeddingModel{
+			ID:          model.ID,
+			Name:        model.Name,
+			Dimension:   model.Dimension,
+			Available:   model.Available,
+			Description: model.Description,
+		}
+	}
+
+	return embedding.Config{
+		BaseURL:      c.Embedding.BaseURL,
+		APIKey:       c.Embedding.APIKey,
+		RPMLimit:     c.Embedding.RPMLimit,
+		TPMLimit:     c.Embedding.TPMLimit,
+		Timeout:      30 * time.Second, // Default timeout
+		Models:       embeddingModels,
+		DefaultModel: c.Embedding.DefaultModel,
 	}
 }

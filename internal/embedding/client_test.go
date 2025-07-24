@@ -258,14 +258,14 @@ func TestConvertTextsToVectors(t *testing.T) {
 
 	texts := []types.TextWithMetadata{
 		{
-			ID:   "doc1",
+			ID:   func() *uint64 { id := uint64(1); return &id }(),
 			Text: "Hello world",
 			Metadata: map[string]interface{}{
 				"source": "test1",
 			},
 		},
 		{
-			ID:   "doc2",
+			ID:   func() *uint64 { id := uint64(2); return &id }(),
 			Text: "Test text",
 			Metadata: map[string]interface{}{
 				"source": "test2",
@@ -283,8 +283,8 @@ func TestConvertTextsToVectors(t *testing.T) {
 	}
 
 	// Check first vector
-	if vectors[0].ID != "doc1" {
-		t.Errorf("Expected vector ID doc1, got %s", vectors[0].ID)
+	if vectors[0].ID != 1 {
+		t.Errorf("Expected vector ID 1, got %d", vectors[0].ID)
 	}
 
 	if len(vectors[0].Elements) != 3 {

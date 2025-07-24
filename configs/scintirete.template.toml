@@ -57,6 +57,30 @@ api_key = ""
 rpm_limit = 3500
 # 每分钟 Token 数限制 (TPM)
 tpm_limit = 90000
+# 默认使用的模型
+default_model = "text-embedding-3-small"
+
+# 可用的embedding模型列表
+[[embedding.models]]
+id = "text-embedding-3-small"
+name = "OpenAI Text Embedding 3 Small"
+dimension = 1536
+available = true
+description = "小型、快速的embedding模型"
+
+[[embedding.models]]
+id = "text-embedding-3-large"
+name = "OpenAI Text Embedding 3 Large"
+dimension = 3072
+available = true
+description = "大型、高性能的embedding模型"
+
+[[embedding.models]]
+id = "text-embedding-ada-002"
+name = "OpenAI Ada v2"
+dimension = 1536
+available = true
+description = "OpenAI经典embedding模型"
 
 
 # [observability] 表定义了可观测性相关的配置

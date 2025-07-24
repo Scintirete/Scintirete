@@ -195,7 +195,7 @@ func TestManager_AOFOperations(t *testing.T) {
 			name: "LogInsertVectors",
 			fn: func() error {
 				vectors := []types.Vector{
-					{ID: "v1", Elements: []float32{1, 2, 3}},
+					{ID: 1, Elements: []float32{1, 2, 3}},
 				}
 				return manager.LogInsertVectors(ctx, "test_db", "test_coll", vectors)
 			},
@@ -203,7 +203,7 @@ func TestManager_AOFOperations(t *testing.T) {
 		{
 			name: "LogDeleteVectors",
 			fn: func() error {
-				return manager.LogDeleteVectors(ctx, "test_db", "test_coll", []string{"v1"})
+				return manager.LogDeleteVectors(ctx, "test_db", "test_coll", []string{"1"})
 			},
 		},
 	}
@@ -246,7 +246,7 @@ func TestManager_SaveSnapshot(t *testing.T) {
 						Metric: types.DistanceMetricL2,
 					},
 					Vectors: []types.Vector{
-						{ID: "v1", Elements: []float32{1, 2, 3}},
+						{ID: 1, Elements: []float32{1, 2, 3}},
 					},
 					VectorCount:  1,
 					DeletedCount: 0,
@@ -365,7 +365,7 @@ func TestManager_RewriteAOF(t *testing.T) {
 		},
 		{
 			Command:    "INSERT_VECTORS",
-			Args:       map[string]interface{}{"vectors": []types.Vector{{ID: "v1", Elements: []float32{1.0, 2.0}}}},
+			Args:       map[string]interface{}{"vectors": []types.Vector{{ID: 1, Elements: []float32{1.0, 2.0}}}},
 			Database:   "db1",
 			Collection: "coll1",
 		},

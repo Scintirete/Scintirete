@@ -44,14 +44,14 @@ func TestRDBManager_SaveAndLoad(t *testing.T) {
 						},
 						Vectors: []types.Vector{
 							{
-								ID:       "vector1",
+								ID:       1,
 								Elements: []float32{1.0, 2.0, 3.0},
 								Metadata: map[string]interface{}{
 									"label": "test",
 								},
 							},
 							{
-								ID:       "vector2",
+								ID:       2,
 								Elements: []float32{4.0, 5.0, 6.0},
 								Metadata: map[string]interface{}{
 									"label": "test2",
@@ -112,12 +112,12 @@ func TestRDBManager_SaveAndLoad(t *testing.T) {
 	assert.Len(t, testColl.Vectors, 2)
 
 	vector1 := testColl.Vectors[0]
-	assert.Equal(t, "vector1", vector1.ID)
+	assert.Equal(t, uint64(1), vector1.ID)
 	assert.Equal(t, []float32{1.0, 2.0, 3.0}, vector1.Elements)
 	assert.NotNil(t, vector1.Metadata)
 
 	vector2 := testColl.Vectors[1]
-	assert.Equal(t, "vector2", vector2.ID)
+	assert.Equal(t, uint64(2), vector2.ID)
 	assert.Equal(t, []float32{4.0, 5.0, 6.0}, vector2.Elements)
 	assert.NotNil(t, vector2.Metadata)
 
@@ -213,7 +213,7 @@ func TestRDBManager_CreateSnapshot(t *testing.T) {
 					},
 					Vectors: []types.Vector{
 						{
-							ID:       "v1",
+							ID:       1,
 							Elements: []float32{0.1, 0.2, 0.3},
 							Metadata: nil,
 						},
@@ -257,6 +257,6 @@ func TestRDBManager_CreateSnapshot(t *testing.T) {
 
 	// Verify vector
 	vector := collSnapshot.Vectors[0]
-	assert.Equal(t, "v1", vector.ID)
+	assert.Equal(t, uint64(1), vector.ID)
 	assert.Equal(t, []float32{0.1, 0.2, 0.3}, vector.Elements)
 }

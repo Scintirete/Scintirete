@@ -763,7 +763,7 @@ func (c *CLI) searchCommand(args []string) error {
 	fmt.Println()
 
 	for i, result := range resp.Results {
-		fmt.Printf("%d) ID: %s, Distance: %.6f\n", i+1, result.Vector.Id, result.Distance)
+		fmt.Printf("%d) ID: %d, Distance: %.6f\n", i+1, result.Vector.Id, result.Distance)
 		if len(result.Vector.Elements) > 0 {
 			fmt.Printf("   Vector: [%.3f", result.Vector.Elements[0])
 			for j := 1; j < len(result.Vector.Elements) && j < 5; j++ {
@@ -996,7 +996,7 @@ func (c *CLI) textSearchCommand(args []string) error {
 	fmt.Printf("Found %d results:\n\n", len(resp.Results))
 
 	for i, result := range resp.Results {
-		fmt.Printf("%d. ID: %s, Distance: %.6f\n", i+1, result.Id, result.Distance)
+		fmt.Printf("%d. ID: %d, Distance: %.6f\n", i+1, result.Id, result.Distance)
 		if result.Metadata != nil {
 			metadataJSON, _ := json.MarshalIndent(convertFromStruct(result.Metadata), "   ", "  ")
 			fmt.Printf("   Metadata: %s\n", string(metadataJSON))

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -381,7 +382,7 @@ func (r *RDBManager) createVector(builder *flatbuffers.Builder, vector types.Vec
 	}
 
 	// Create strings
-	idStr := builder.CreateString(vector.ID)
+	idStr := builder.CreateString(fmt.Sprintf("%d", vector.ID))
 	metadataStr := builder.CreateString(string(metadataBytes))
 
 	// Create vector
@@ -613,8 +614,14 @@ func (r *RDBManager) parseVector(fbVec *fbrdb.Vector) (*types.Vector, error) {
 		}
 	}
 
+	// Convert ID from string to uint64
+	id, err := strconv.ParseUint(string(fbVec.Id()), 10, 64)
+	if err != nil {
+		return nil, utils.ErrCorruptedData("failed to parse vector ID: " + err.Error())
+	}
+
 	return &types.Vector{
-		ID:       string(fbVec.Id()),
+		ID:       id,
 		Elements: elements,
 		Metadata: metadata,
 	}, nil
