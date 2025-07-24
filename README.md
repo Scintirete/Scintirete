@@ -28,7 +28,7 @@ Scintirete targets small to medium-scale projects, edge computing scenarios, and
 
 ### Prerequisites
 
-- Go 1.21+ (for building from source)
+- Go 1.24+ (for building from source)
 - Docker (optional, for containerized deployment)
 
 ### Installation
