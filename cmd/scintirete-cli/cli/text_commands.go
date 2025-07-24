@@ -10,10 +10,10 @@ import (
 	pb "github.com/scintirete/scintirete/gen/go/scintirete/v1"
 )
 
-// textCommand handles text embedding operations (insert and search)
+// textCommand handles text embedding operations (insert, search, and models)
 func (c *CLI) textCommand(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: text <insert|search> <args...>")
+	if len(args) < 1 {
+		return fmt.Errorf("usage: text <insert|search|models> <args...>")
 	}
 
 	subCommand := strings.ToLower(args[0])
@@ -30,6 +30,8 @@ func (c *CLI) textCommand(args []string) error {
 			return fmt.Errorf("usage: text search <collection> [model] <text> [top-k] [ef-search]")
 		}
 		return c.textSearchCommand(subArgs)
+	case "models":
+		return c.textModelsCommand(subArgs)
 	default:
 		return fmt.Errorf("unknown text sub-command: %s", subCommand)
 	}
@@ -115,6 +117,62 @@ func (c *CLI) textInsertCommand(args []string) error {
 	}
 
 	fmt.Printf("Successfully inserted text with ID '%s' into collection '%s'\n", id, collection)
+	return nil
+}
+
+// textModelsCommand handles listing available embedding models
+func (c *CLI) textModelsCommand(args []string) error {
+	// Create the request
+	req := &pb.ListEmbeddingModelsRequest{
+		Auth: &pb.AuthInfo{
+			Password: c.password,
+		},
+	}
+
+	// Make the request
+	resp, err := c.client.ListEmbeddingModels(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("failed to list embedding models: %v", err)
+	}
+
+	// Display results
+	fmt.Println("可用的 Embedding 模型:")
+	fmt.Printf("默认模型: %s\n\n", resp.DefaultModel)
+
+	if len(resp.Models) == 0 {
+		fmt.Println("没有可用的模型")
+		return nil
+	}
+
+	fmt.Printf("%-30s %-20s %-8s %-8s %s\n", "模型ID", "名称", "维度", "状态", "描述")
+	fmt.Println(strings.Repeat("-", 90))
+
+	for _, model := range resp.Models {
+		status := "可用"
+		if !model.Available {
+			status = "不可用"
+		}
+
+		// Truncate long names for better display
+		name := model.Name
+		if len(name) > 20 {
+			name = name[:17] + "..."
+		}
+
+		description := model.Description
+		if len(description) > 40 {
+			description = description[:37] + "..."
+		}
+
+		fmt.Printf("%-30s %-20s %-8d %-8s %s\n",
+			model.Id,
+			name,
+			model.Dimension,
+			status,
+			description)
+	}
+
+	fmt.Printf("\n总计: %d 个模型\n", len(resp.Models))
 	return nil
 }
 

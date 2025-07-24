@@ -33,7 +33,7 @@ func GetCommands() map[string]Command {
 		"database":   {Name: "database", Description: "Database operations", Usage: "database <list|create|drop> [args...]", Handler: (*CLI).databaseCommand},
 		"collection": {Name: "collection", Description: "Collection operations", Usage: "collection <list|create|drop|info> [args...]", Handler: (*CLI).collectionCommand},
 		"vector":     {Name: "vector", Description: "Vector operations", Usage: "vector <insert|search|delete> [args...]", Handler: (*CLI).vectorCommand},
-		"text":       {Name: "text", Description: "Text embedding operations", Usage: "text <insert|search> <args...>", Handler: (*CLI).textCommand},
+		"text":       {Name: "text", Description: "Text embedding operations", Usage: "text <insert|search|models> <args...>", Handler: (*CLI).textCommand},
 		"save":       {Name: "save", Description: "Synchronously save RDB snapshot", Usage: "save", Handler: (*CLI).saveCommand},
 		"bgsave":     {Name: "bgsave", Description: "Asynchronously save RDB snapshot", Usage: "bgsave", Handler: (*CLI).bgsaveCommand},
 	}
@@ -65,6 +65,7 @@ func (c *CLI) helpCommand(args []string) error {
 		fmt.Println()
 		fmt.Println("  text insert <collection> [model] <id> <text> [metadata] Insert text with embedding")
 		fmt.Println("  text search <collection> [model] <text> [top-k] [ef-search] Search text with embedding")
+		fmt.Println("  text models                                               List available embedding models")
 		fmt.Println()
 		fmt.Println("Type 'help <command>' for detailed usage information.")
 	} else {
@@ -98,6 +99,7 @@ func (c *CLI) helpCommand(args []string) error {
 				fmt.Println("\nSub-commands:")
 				fmt.Println("  insert <collection> [model] <id> <text> [metadata] Insert text with embedding")
 				fmt.Println("  search <collection> [model] <text> [top-k] [ef-search] Search text with embedding")
+				fmt.Println("  models                                               List available embedding models")
 			}
 		} else {
 			return fmt.Errorf("unknown command: %s", cmdName)
