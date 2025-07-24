@@ -193,9 +193,8 @@ For comprehensive API documentation and usage examples, refer to the [documentat
 ## Performance Considerations
 
 - **Memory Usage**: Vectors are stored in memory for optimal search performance
-- **Index Configuration**: Tune HNSW parameters (`m`, `ef_construction`, `ef_search`) based on your accuracy/speed requirements
-- **Persistence**: Configure AOF sync strategy based on your durability vs. performance needs
-- **Rate Limiting**: Configure embedding API rate limits to prevent quota exhaustion
+- **Index Configuration**: Tune HNSW parameters (`m`, `ef_construction`, `ef_search`) based on accuracy/speed requirements
+- **Persistence**: Configure AOF sync strategy based on durability vs. performance needs
 
 ## Contributing
 
