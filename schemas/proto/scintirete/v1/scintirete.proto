@@ -31,7 +31,7 @@ service ScintireteService {
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse);
 
   // --- 向量数据操作 ---
-  // 插入预先计算好的向量（支持批量）
+  // 插入预先计算好的向量（支持批量，ID由服务端自动生成）
   rpc InsertVectors(InsertVectorsRequest) returns (InsertVectorsResponse);
   // 删除指定ID的向量（标记删除）
   rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse);
@@ -39,7 +39,7 @@ service ScintireteService {
   rpc Search(SearchRequest) returns (SearchResponse);
 
   // --- 文本自动嵌入与操作 ---
-  // 传入文本，自动调用 embedding API 后插入（支持批量）
+  // 传入文本，自动调用 embedding API 后插入（支持批量，ID由服务端自动生成）
   rpc EmbedAndInsert(EmbedAndInsertRequest) returns (EmbedAndInsertResponse);
   // 传入文本，自动调用 embedding API 后进行搜索
   rpc EmbedAndSearch(EmbedAndSearchRequest) returns (SearchResponse);
@@ -76,7 +76,7 @@ message HnswConfig {
 
 // 向量数据点
 message Vector {
-  uint64 id = 1;                     // 向量的唯一ID (自增)
+  optional uint64 id = 1;            // 向量的唯一ID (服务端自动生成，客户端不需要提供)
   repeated float elements = 2;       // 向量的浮点数表示
   google.protobuf.Struct metadata = 3; // 附加的 JSON 元数据
 }
@@ -204,7 +204,7 @@ message InsertVectorsRequest {
 }
 
 message InsertVectorsResponse {
-  repeated uint64 inserted_ids = 1; // 成功插入的向量 ID 列表
+  repeated uint64 inserted_ids = 1; // 服务端生成的向量 ID 列表
   int32 inserted_count = 2;         // 成功插入的数量
 }
 
@@ -244,7 +244,7 @@ message EmbedAndInsertRequest {
 }
 
 message EmbedAndInsertResponse {
-  repeated uint64 inserted_ids = 1; // 成功插入的向量 ID 列表
+  repeated uint64 inserted_ids = 1; // 服务端生成的向量 ID 列表
   int32 inserted_count = 2;         // 成功插入的数量
 }
 

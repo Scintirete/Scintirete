@@ -423,13 +423,14 @@ func (e *Engine) RestoreFromSnapshot(ctx context.Context, snapshot *rdb.RDBSnaps
 				}
 			}
 
-			// Update collection metadata
+			// Update collection metadata and ensure nextID is correct
 			if dbCollection, ok := collection.(*Collection); ok {
 				dbCollection.mu.Lock()
 				dbCollection.createdAt = collSnapshot.CreatedAt
 				dbCollection.updatedAt = collSnapshot.UpdatedAt
 				dbCollection.vectorCount = collSnapshot.VectorCount
 				dbCollection.deletedCount = collSnapshot.DeletedCount
+				dbCollection.updateNextID() // Ensure nextID is set correctly
 				dbCollection.mu.Unlock()
 			}
 		}
