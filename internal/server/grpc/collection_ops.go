@@ -113,6 +113,13 @@ func (s *Server) DropCollection(ctx context.Context, req *pb.DropCollectionReque
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// Get collection info before dropping to record vector count
+	var droppedVectors int64
+	collectionInfo, err := db.GetCollectionInfo(ctx, req.CollectionName)
+	if err == nil {
+		droppedVectors = collectionInfo.VectorCount
+	}
+
 	// Drop collection
 	if err := db.DropCollection(ctx, req.CollectionName); err != nil {
 		if utils.IsScintireteError(err) {
@@ -137,7 +144,7 @@ func (s *Server) DropCollection(ctx context.Context, req *pb.DropCollectionReque
 		CollectionName: req.CollectionName,
 		Success:        true,
 		Message:        "Collection dropped successfully",
-		DroppedVectors: 0, // TODO: Get actual count
+		DroppedVectors: droppedVectors,
 	}, nil
 }
 

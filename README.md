@@ -16,7 +16,7 @@ Scintirete is a lightweight, production-ready vector database built on the HNSW 
 
 - **Lightweight & Simple**: Self-contained implementation focused on core vector search functionality with minimal dependencies
 - **High Performance**: In-memory HNSW graph indexing provides millisecond-level nearest neighbor search
-- **Data Safety**: Redis-like AOF + RDB persistence mechanism ensures data durability
+- **Data Safety**: Based on flatbuffers, implements a Redis-like AOF + RDB persistence mechanism to ensure data durability
 - **Modern APIs**: Native support for both gRPC and HTTP/JSON interfaces for seamless integration
 - **Production Ready**: Structured logging, audit logs, Prometheus metrics, and comprehensive CLI tools designed for production environments
 - **Cross-platform**: Support Linux, macOS, Windows, arm64, amd64 architectures out of the box
