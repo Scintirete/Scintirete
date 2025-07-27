@@ -5,28 +5,35 @@ package http
 func (h *Server) setupRoutes() {
 	api := h.engine.Group("/api/v1")
 
-	// Database operations
-	api.POST("/databases", h.handleCreateDatabase)
-	api.DELETE("/databases/:db_name", h.handleDropDatabase)
-	api.GET("/databases", h.handleListDatabases)
-
-	// Collection operations
-	api.POST("/databases/:db_name/collections", h.handleCreateCollection)
-	api.DELETE("/databases/:db_name/collections/:coll_name", h.handleDropCollection)
-	api.GET("/databases/:db_name/collections/:coll_name", h.handleGetCollectionInfo)
-	api.GET("/databases/:db_name/collections", h.handleListCollections)
-
-	// Vector operations
-	api.POST("/databases/:db_name/collections/:coll_name/vectors", h.handleInsertVectors)
-	api.DELETE("/databases/:db_name/collections/:coll_name/vectors", h.handleDeleteVectors)
-	api.POST("/databases/:db_name/collections/:coll_name/search", h.handleSearch)
-
-	// Text embedding operations
-	api.POST("/databases/:db_name/collections/:coll_name/embed", h.handleEmbedAndInsert)
-	api.POST("/databases/:db_name/collections/:coll_name/embed/search", h.handleEmbedAndSearch)
-	api.POST("/embed", h.handleEmbedText)
-	api.GET("/embed/models", h.handleListEmbeddingModels)
-
-	// Health check
+	// Public routes (no authentication required)
+	// Health check - only endpoint that doesn't require auth
 	api.GET("/health", h.handleHealth)
+
+	// Protected routes (authentication required)
+	// All other endpoints require authentication
+	protected := api.Group("")
+	protected.Use(authMiddleware())
+	{
+		// Database operations requiring auth
+		protected.POST("/databases", h.handleCreateDatabase)
+		protected.DELETE("/databases/:db_name", h.handleDropDatabase)
+		protected.GET("/databases", h.handleListDatabases)
+
+		// Collection operations requiring auth
+		protected.POST("/databases/:db_name/collections", h.handleCreateCollection)
+		protected.DELETE("/databases/:db_name/collections/:coll_name", h.handleDropCollection)
+		protected.GET("/databases/:db_name/collections/:coll_name", h.handleGetCollectionInfo)
+		protected.GET("/databases/:db_name/collections", h.handleListCollections)
+
+		// Vector operations requiring auth
+		protected.POST("/databases/:db_name/collections/:coll_name/vectors", h.handleInsertVectors)
+		protected.DELETE("/databases/:db_name/collections/:coll_name/vectors", h.handleDeleteVectors)
+		protected.POST("/databases/:db_name/collections/:coll_name/search", h.handleSearch)
+
+		// Text embedding operations requiring auth
+		protected.POST("/databases/:db_name/collections/:coll_name/embed", h.handleEmbedAndInsert)
+		protected.POST("/databases/:db_name/collections/:coll_name/embed/search", h.handleEmbedAndSearch)
+		protected.POST("/embed", h.handleEmbedText)
+		protected.GET("/embed/models", h.handleListEmbeddingModels)
+	}
 }

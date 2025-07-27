@@ -143,6 +143,137 @@ func TestCORSMiddleware(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Access-Control-Allow-Methods"), "POST")
 }
 
+func TestAuthMiddleware(t *testing.T) {
+	// Create a real gRPC server
+	config := server.ServerConfig{
+		Passwords: []string{"test-password"},
+		PersistenceConfig: persistence.Config{
+			DataDir:     "/tmp/test",
+			RDBFilename: "test.rdb",
+			AOFFilename: "test.aof",
+		},
+		EmbeddingConfig: embedding.Config{
+			BaseURL: "http://localhost:8080",
+			APIKey:  "test-key",
+		},
+	}
+
+	grpcSrv, err := grpcserver.NewServer(config)
+	if err != nil {
+		t.Fatalf("Failed to create gRPC server: %v", err)
+	}
+
+	httpSrv := NewServer(grpcSrv)
+
+	tests := []struct {
+		name           string
+		authHeader     string
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name:           "Valid Bearer token",
+			authHeader:     "Bearer test-password",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Missing Authorization header",
+			authHeader:     "",
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Authorization header required",
+		},
+		{
+			name:           "Invalid format - no Bearer prefix",
+			authHeader:     "test-password",
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Invalid authorization format. Expected: Bearer {token}",
+		},
+		{
+			name:           "Invalid format - wrong prefix",
+			authHeader:     "Basic test-password",
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Invalid authorization format. Expected: Bearer {token}",
+		},
+		{
+			name:           "Empty token",
+			authHeader:     "Bearer ",
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Token cannot be empty",
+		},
+		{
+			name:           "Bearer only",
+			authHeader:     "Bearer",
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Invalid authorization format. Expected: Bearer {token}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test with protected endpoint
+			req, _ := http.NewRequest("GET", "/api/v1/databases", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			w := httptest.NewRecorder()
+
+			httpSrv.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.expectedError != "" {
+				var response map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.False(t, response["success"].(bool))
+				assert.Contains(t, response["error"], tt.expectedError)
+			}
+		})
+	}
+}
+
+func TestPublicEndpointsNoAuth(t *testing.T) {
+	// Create a real gRPC server
+	config := server.ServerConfig{
+		Passwords: []string{"test-password"},
+		PersistenceConfig: persistence.Config{
+			DataDir:     "/tmp/test",
+			RDBFilename: "test.rdb",
+			AOFFilename: "test.aof",
+		},
+		EmbeddingConfig: embedding.Config{
+			BaseURL: "http://localhost:8080",
+			APIKey:  "test-key",
+		},
+	}
+
+	grpcSrv, err := grpcserver.NewServer(config)
+	if err != nil {
+		t.Fatalf("Failed to create gRPC server: %v", err)
+	}
+
+	httpSrv := NewServer(grpcSrv)
+
+	// Test public endpoints that should not require authentication
+	publicEndpoints := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/api/v1/health"},
+	}
+
+	for _, endpoint := range publicEndpoints {
+		t.Run(endpoint.method+" "+endpoint.path, func(t *testing.T) {
+			req, _ := http.NewRequest(endpoint.method, endpoint.path, nil)
+			w := httptest.NewRecorder()
+			httpSrv.ServeHTTP(w, req)
+
+			// Should not return 401 Unauthorized
+			assert.NotEqual(t, http.StatusUnauthorized, w.Code)
+		})
+	}
+}
+
 func TestErrorHandling(t *testing.T) {
 	// Create a real gRPC server
 	config := server.ServerConfig{
@@ -165,10 +296,11 @@ func TestErrorHandling(t *testing.T) {
 
 	httpSrv := NewServer(grpcSrv)
 
-	// Test invalid JSON
+	// Test invalid JSON with a protected endpoint (databases with auth)
 	invalidJSON := `{"invalid": json}`
 	req, _ := http.NewRequest("POST", "/api/v1/databases", bytes.NewBuffer([]byte(invalidJSON)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-password")
 	w := httptest.NewRecorder()
 
 	httpSrv.ServeHTTP(w, req)
