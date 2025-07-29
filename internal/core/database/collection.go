@@ -199,20 +199,8 @@ func (c *Collection) Search(ctx context.Context, query []float32, params types.S
 	}
 
 	// Perform search using the index
-	results, err := c.index.Search(ctx, query, params)
-	if err != nil {
-		return nil, err
-	}
-
-	// Filter out deleted vectors
-	var filteredResults []types.SearchResult
-	for _, result := range results {
-		if !c.deletedIDs[result.Vector.ID] {
-			filteredResults = append(filteredResults, result)
-		}
-	}
-
-	return filteredResults, nil
+	// The index already handles deleted vectors and sorts results by distance
+	return c.index.Search(ctx, query, params)
 }
 
 // Get retrieves a vector by ID

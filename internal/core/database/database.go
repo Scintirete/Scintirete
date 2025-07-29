@@ -365,8 +365,8 @@ func (e *Engine) GetDatabaseState(ctx context.Context) (map[string]rdb.DatabaseS
 				Name:         collInfo.Name,
 				Config:       convertCollectionInfoToConfig(collInfo),
 				Vectors:      vectors,
-				VectorCount:  collInfo.VectorCount,
-				DeletedCount: collInfo.DeletedCount,
+				VectorCount:  int64(len(vectors)), // Fix: Use actual count of saved vectors
+				DeletedCount: 0,                   // Fix: No deleted vectors in snapshot
 				CreatedAt:    collInfo.CreatedAt,
 				UpdatedAt:    collInfo.UpdatedAt,
 			}
@@ -428,8 +428,13 @@ func (e *Engine) RestoreFromSnapshot(ctx context.Context, snapshot *rdb.RDBSnaps
 				dbCollection.mu.Lock()
 				dbCollection.createdAt = collSnapshot.CreatedAt
 				dbCollection.updatedAt = collSnapshot.UpdatedAt
-				dbCollection.vectorCount = collSnapshot.VectorCount
-				dbCollection.deletedCount = collSnapshot.DeletedCount
+
+				// The snapshot now contains correct counts:
+				// - VectorCount = actual vectors in snapshot
+				// - DeletedCount = 0 (no deleted vectors in snapshot)
+				// The Insert() method already set vectorCount correctly
+				// deletedCount starts at 0, which is correct
+
 				dbCollection.updateNextID() // Ensure nextID is set correctly
 				dbCollection.mu.Unlock()
 			}

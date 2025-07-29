@@ -26,9 +26,11 @@ func NewServer(grpcServer *grpcserver.Server) *Server {
 		grpcServer: grpcServer,
 		engine:     engine,
 		marshaler: protojson.MarshalOptions{
-			UseProtoNames:   true,
-			EmitUnpopulated: false,
-			Indent:          "  ",
+			UseProtoNames:     true,
+			EmitUnpopulated:   false,
+			EmitDefaultValues: true,
+			Indent:            "  ",
+			UseEnumNumbers:    true,
 		},
 		unmarshaler: protojson.UnmarshalOptions{
 			DiscardUnknown: true,
