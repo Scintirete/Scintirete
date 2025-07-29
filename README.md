@@ -28,7 +28,7 @@ Scintirete targets small to medium-scale projects, edge computing scenarios, and
 
 ### Prerequisites
 
-- Go 1.21+ (for building from source)
+- Go 1.24+ (for building from source)
 - Docker (optional, for containerized deployment)
 
 ### Installation
@@ -185,7 +185,7 @@ tpm_limit = 90000
 
 Scintirete provides both gRPC and HTTP/JSON APIs:
 
-- **gRPC**: High-performance interface defined in [protobuf](api/proto/scintirete/v1/scintirete.proto)
+- **gRPC**: High-performance interface defined in [protobuf](schemas/proto/scintirete/v1/scintirete.proto)
 - **HTTP/JSON**: RESTful interface accessible at `http://localhost:8080/`
 
 For comprehensive API documentation and usage examples, refer to the [documentation](docs/).
@@ -193,9 +193,8 @@ For comprehensive API documentation and usage examples, refer to the [documentat
 ## Performance Considerations
 
 - **Memory Usage**: Vectors are stored in memory for optimal search performance
-- **Index Configuration**: Tune HNSW parameters (`m`, `ef_construction`, `ef_search`) based on your accuracy/speed requirements
-- **Persistence**: Configure AOF sync strategy based on your durability vs. performance needs
-- **Rate Limiting**: Configure embedding API rate limits to prevent quota exhaustion
+- **Index Configuration**: Tune HNSW parameters (`m`, `ef_construction`, `ef_search`) based on accuracy/speed requirements
+- **Persistence**: Configure AOF sync strategy based on durability vs. performance needs
 
 ## Contributing
 

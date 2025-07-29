@@ -12,6 +12,7 @@ import (
 func (h *Server) handleInsertVectors(c *gin.Context) {
 	dbName := c.Param("db_name")
 	collName := c.Param("coll_name")
+	auth := getAuthFromContext(c)
 
 	var req pb.InsertVectorsRequest
 	if err := h.bindJSON(c, &req); err != nil {
@@ -19,9 +20,10 @@ func (h *Server) handleInsertVectors(c *gin.Context) {
 		return
 	}
 
-	// Set path parameters
+	// Set path parameters and auth
 	req.DbName = dbName
 	req.CollectionName = collName
+	req.Auth = auth
 
 	// Validate required fields
 	if len(req.Vectors) == 0 {
@@ -42,6 +44,7 @@ func (h *Server) handleInsertVectors(c *gin.Context) {
 func (h *Server) handleDeleteVectors(c *gin.Context) {
 	dbName := c.Param("db_name")
 	collName := c.Param("coll_name")
+	auth := getAuthFromContext(c)
 
 	var req pb.DeleteVectorsRequest
 	if err := h.bindJSON(c, &req); err != nil {
@@ -49,9 +52,10 @@ func (h *Server) handleDeleteVectors(c *gin.Context) {
 		return
 	}
 
-	// Set path parameters
+	// Set path parameters and auth
 	req.DbName = dbName
 	req.CollectionName = collName
+	req.Auth = auth
 
 	// Validate required fields
 	if len(req.Ids) == 0 {
@@ -72,6 +76,7 @@ func (h *Server) handleDeleteVectors(c *gin.Context) {
 func (h *Server) handleSearch(c *gin.Context) {
 	dbName := c.Param("db_name")
 	collName := c.Param("coll_name")
+	auth := getAuthFromContext(c)
 
 	var req pb.SearchRequest
 	if err := h.bindJSON(c, &req); err != nil {
@@ -79,9 +84,10 @@ func (h *Server) handleSearch(c *gin.Context) {
 		return
 	}
 
-	// Set path parameters
+	// Set path parameters and auth
 	req.DbName = dbName
 	req.CollectionName = collName
+	req.Auth = auth
 
 	// Validate required fields
 	if len(req.QueryVector) == 0 {

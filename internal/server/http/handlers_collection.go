@@ -11,6 +11,7 @@ import (
 // handleCreateCollection handles collection creation requests
 func (h *Server) handleCreateCollection(c *gin.Context) {
 	dbName := c.Param("db_name")
+	auth := getAuthFromContext(c)
 
 	var req pb.CreateCollectionRequest
 	if err := h.bindJSON(c, &req); err != nil {
@@ -18,8 +19,9 @@ func (h *Server) handleCreateCollection(c *gin.Context) {
 		return
 	}
 
-	// Set database name from URL path
+	// Set database name from URL path and auth
 	req.DbName = dbName
+	req.Auth = auth
 
 	// Validate required fields
 	if req.CollectionName == "" {
@@ -44,10 +46,10 @@ func (h *Server) handleCreateCollection(c *gin.Context) {
 func (h *Server) handleDropCollection(c *gin.Context) {
 	dbName := c.Param("db_name")
 	collName := c.Param("coll_name")
-	password := c.GetHeader("Authorization")
+	auth := getAuthFromContext(c)
 
 	req := &pb.DropCollectionRequest{
-		Auth:           &pb.AuthInfo{Password: password},
+		Auth:           auth,
 		DbName:         dbName,
 		CollectionName: collName,
 	}
@@ -65,10 +67,10 @@ func (h *Server) handleDropCollection(c *gin.Context) {
 func (h *Server) handleGetCollectionInfo(c *gin.Context) {
 	dbName := c.Param("db_name")
 	collName := c.Param("coll_name")
-	password := c.GetHeader("Authorization")
+	auth := getAuthFromContext(c)
 
 	req := &pb.GetCollectionInfoRequest{
-		Auth:           &pb.AuthInfo{Password: password},
+		Auth:           auth,
 		DbName:         dbName,
 		CollectionName: collName,
 	}
@@ -85,10 +87,10 @@ func (h *Server) handleGetCollectionInfo(c *gin.Context) {
 // handleListCollections handles collection list requests
 func (h *Server) handleListCollections(c *gin.Context) {
 	dbName := c.Param("db_name")
-	password := c.GetHeader("Authorization")
+	auth := getAuthFromContext(c)
 
 	req := &pb.ListCollectionsRequest{
-		Auth:   &pb.AuthInfo{Password: password},
+		Auth:   auth,
 		DbName: dbName,
 	}
 

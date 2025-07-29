@@ -28,7 +28,7 @@ Scintirete 的目标是为中小型项目、边缘计算场景以及需要快速
 
 ### 环境要求
 
-- Go 1.21+（从源码构建时需要）
+- Go 1.24+（从源码构建时需要）
 - Docker（可选，用于容器化部署）
 
 ### 安装
@@ -190,7 +190,7 @@ tpm_limit = 90000
 
 Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
 
-- **gRPC**: 高性能接口，定义在 [protobuf](api/proto/scintirete/v1/scintirete.proto) 中
+- **gRPC**: 高性能接口，定义在 [protobuf](schemas/proto/scintirete/v1/scintirete.proto) 中
 - **HTTP/JSON**: RESTful 接口，可通过 `http://localhost:8080/` 访问
 
 全面的 API 文档和使用示例请参考 [文档](docs/)。
@@ -198,9 +198,8 @@ Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
 ## 性能考虑
 
 - **内存使用**: 向量存储在内存中以获得最佳搜索性能
-- **索引配置**: 根据您的精度/速度要求调优 HNSW 参数（`m`、`ef_construction`、`ef_search`）
-- **持久化**: 根据您的持久性与性能需求配置 AOF 同步策略
-- **速率限制**: 配置嵌入 API 速率限制以防止配额耗尽
+- **索引配置**: 根据精度/速度要求调优 HNSW 参数（`m`、`ef_construction`、`ef_search`）
+- **持久化**: 根据持久性与性能需求配置 AOF 同步策略
 
 ## 参与贡献
 

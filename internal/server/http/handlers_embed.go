@@ -12,6 +12,7 @@ import (
 func (h *Server) handleEmbedAndInsert(c *gin.Context) {
 	dbName := c.Param("db_name")
 	collName := c.Param("coll_name")
+	auth := getAuthFromContext(c)
 
 	var req pb.EmbedAndInsertRequest
 	if err := h.bindJSON(c, &req); err != nil {
@@ -19,9 +20,10 @@ func (h *Server) handleEmbedAndInsert(c *gin.Context) {
 		return
 	}
 
-	// Set path parameters
+	// Set path parameters and auth
 	req.DbName = dbName
 	req.CollectionName = collName
+	req.Auth = auth
 
 	// Validate required fields
 	if len(req.Texts) == 0 {
@@ -42,6 +44,7 @@ func (h *Server) handleEmbedAndInsert(c *gin.Context) {
 func (h *Server) handleEmbedAndSearch(c *gin.Context) {
 	dbName := c.Param("db_name")
 	collName := c.Param("coll_name")
+	auth := getAuthFromContext(c)
 
 	var req pb.EmbedAndSearchRequest
 	if err := h.bindJSON(c, &req); err != nil {
@@ -49,9 +52,10 @@ func (h *Server) handleEmbedAndSearch(c *gin.Context) {
 		return
 	}
 
-	// Set path parameters
+	// Set path parameters and auth
 	req.DbName = dbName
 	req.CollectionName = collName
+	req.Auth = auth
 
 	// Validate required fields
 	if req.QueryText == "" {
@@ -74,11 +78,16 @@ func (h *Server) handleEmbedAndSearch(c *gin.Context) {
 
 // handleEmbedText handles text embedding requests
 func (h *Server) handleEmbedText(c *gin.Context) {
+	auth := getAuthFromContext(c)
+
 	var req pb.EmbedTextRequest
 	if err := h.bindJSON(c, &req); err != nil {
 		h.respondError(c, http.StatusBadRequest, "Invalid JSON", err)
 		return
 	}
+
+	// Set auth
+	req.Auth = auth
 
 	// Validate required fields
 	if len(req.Texts) == 0 {
@@ -97,10 +106,10 @@ func (h *Server) handleEmbedText(c *gin.Context) {
 
 // handleListEmbeddingModels handles embedding models list requests
 func (h *Server) handleListEmbeddingModels(c *gin.Context) {
-	password := c.GetHeader("Authorization")
+	auth := getAuthFromContext(c)
 
 	req := &pb.ListEmbeddingModelsRequest{
-		Auth: &pb.AuthInfo{Password: password},
+		Auth: auth,
 	}
 
 	resp, err := h.grpcServer.ListEmbeddingModels(c.Request.Context(), req)

@@ -35,10 +35,10 @@ func (h *Server) handleCreateDatabase(c *gin.Context) {
 // handleDropDatabase handles database deletion requests
 func (h *Server) handleDropDatabase(c *gin.Context) {
 	dbName := c.Param("db_name")
-	password := c.GetHeader("Authorization")
+	auth := getAuthFromContext(c)
 
 	req := &pb.DropDatabaseRequest{
-		Auth: &pb.AuthInfo{Password: password},
+		Auth: auth,
 		Name: dbName,
 	}
 
@@ -53,10 +53,10 @@ func (h *Server) handleDropDatabase(c *gin.Context) {
 
 // handleListDatabases handles database list requests
 func (h *Server) handleListDatabases(c *gin.Context) {
-	password := c.GetHeader("Authorization")
+	auth := getAuthFromContext(c)
 
 	req := &pb.ListDatabasesRequest{
-		Auth: &pb.AuthInfo{Password: password},
+		Auth: auth,
 	}
 
 	resp, err := h.grpcServer.ListDatabases(c.Request.Context(), req)
