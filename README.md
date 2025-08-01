@@ -4,7 +4,7 @@
 [![Release](https://github.com/scintirete/scintirete/actions/workflows/release.yml/badge.svg)](https://github.com/scintirete/scintirete/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![](logo.png)
+![](head-logo.jpg)
 
 [中文文档](README_ZH.md)
 
