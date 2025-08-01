@@ -49,3 +49,5 @@ internal/flatbuffers/aof/*.go
 !gen/go/.gitkeep
 !internal/flatbuffers/rdb/.gitkeep
 !internal/flatbuffers/aof/.gitkeep
+
+.DS_Store
