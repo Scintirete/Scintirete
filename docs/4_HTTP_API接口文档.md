@@ -28,6 +28,10 @@ Authorization: Bearer <token>
 }
 ```
 
+## ID 生成说明
+
+**重要**: 在 Scintirete 中，所有向量的 ID 都由服务端自动生成，使用递增的 uint64 类型。客户端在插入向量或文本时**无需**也**不应该**提供 ID 字段。服务端会在插入成功后返回生成的 ID 列表。
+
 ## 接口列表
 
 ### 1. 健康检查
@@ -66,7 +70,18 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应**: 201 Created
+**响应示例**: 201 Created
+```json
+{
+  "success": true,
+  "data": {
+    "name": "database_name",
+    "success": true,
+    "message": "Database created successfully"
+  },
+  "error": null
+}
+```
 
 #### 2.2 删除数据库
 
@@ -79,7 +94,19 @@ Authorization: Bearer <token>
 **参数**:
 - `db_name`: 数据库名称（路径参数）
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "name": "database_name",
+    "success": true,
+    "message": "Database dropped successfully",
+    "dropped_collections": 3
+  },
+  "error": null
+}
+```
 
 #### 2.3 列出数据库
 
@@ -89,7 +116,16 @@ Authorization: Bearer <token>
 
 **认证**: 需要
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "names": ["database1", "database2", "database3"]
+  },
+  "error": null
+}
+```
 
 ---
 
@@ -115,7 +151,27 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应**: 201 Created
+**响应示例**: 201 Created
+```json
+{
+  "success": true,
+  "data": {
+    "db_name": "database_name",
+    "collection_name": "collection_name",
+    "success": true,
+    "message": "Collection created successfully",
+    "info": {
+      "name": "collection_name",
+      "dimension": 768,
+      "vector_count": 0,
+      "deleted_count": 0,
+      "memory_bytes": 0,
+      "metric_type": "COSINE"
+    }
+  },
+  "error": null
+}
+```
 
 #### 3.2 删除集合
 
@@ -129,7 +185,20 @@ Authorization: Bearer <token>
 - `db_name`: 数据库名称（路径参数）
 - `coll_name`: 集合名称（路径参数）
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "db_name": "database_name",
+    "collection_name": "collection_name",
+    "success": true,
+    "message": "Collection dropped successfully",
+    "dropped_vectors": 1000
+  },
+  "error": null
+}
+```
 
 #### 3.3 获取集合信息
 
@@ -143,7 +212,25 @@ Authorization: Bearer <token>
 - `db_name`: 数据库名称（路径参数）
 - `coll_name`: 集合名称（路径参数）
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "name": "collection_name",
+    "dimension": 768,
+    "vector_count": 1000,
+    "deleted_count": 50,
+    "memory_bytes": 3145728,
+    "metric_type": "COSINE",
+    "hnsw_config": {
+      "m": 16,
+      "ef_construction": 200
+    }
+  },
+  "error": null
+}
+```
 
 #### 3.4 列出集合
 
@@ -156,7 +243,25 @@ Authorization: Bearer <token>
 **参数**:
 - `db_name`: 数据库名称（路径参数）
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "collections": [
+      {
+        "name": "collection1",
+        "dimension": 768,
+        "vector_count": 1000,
+        "deleted_count": 50,
+        "memory_bytes": 3145728,
+        "metric_type": "COSINE"
+      }
+    ]
+  },
+  "error": null
+}
+```
 
 ---
 
@@ -179,7 +284,6 @@ Authorization: Bearer <token>
 {
   "vectors": [
     {
-      "id": "vector_id_1",
       "values": [0.1, 0.2, 0.3, ...],
       "metadata": {"key": "value"}
     }
@@ -187,7 +291,19 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应**: 201 Created
+**响应示例**: 201 Created
+```json
+{
+  "success": true,
+  "data": {
+    "inserted_ids": [1, 2, 3],
+    "inserted_count": 3
+  },
+  "error": null
+}
+```
+
+**注意**: 向量的 ID 由服务端自动生成，客户端无需提供。
 
 #### 4.2 删除向量
 
@@ -204,11 +320,22 @@ Authorization: Bearer <token>
 **请求体**:
 ```json
 {
-  "ids": ["vector_id_1", "vector_id_2"]
+  "ids": [1, 2, 3]
 }
 ```
 
-**响应**: 200 OK
+**注意**: 这里的 IDs 必须是服务端之前生成的数字 ID（uint64 类型），而不是字符串。
+
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "deleted_count": 2
+  },
+  "error": null
+}
+```
 
 #### 4.3 向量搜索
 
@@ -231,7 +358,22 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "id": 1,
+        "distance": 0.123,
+        "metadata": {"category": "test"}
+      }
+    ]
+  },
+  "error": null
+}
+```
 
 ---
 
@@ -254,7 +396,6 @@ Authorization: Bearer <token>
 {
   "texts": [
     {
-      "id": "text_id_1",
       "content": "文本内容",
       "metadata": {"key": "value"}
     }
@@ -262,7 +403,19 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应**: 201 Created
+**响应示例**: 201 Created
+```json
+{
+  "success": true,
+  "data": {
+    "inserted_ids": [1, 2, 3],
+    "inserted_count": 3
+  },
+  "error": null
+}
+```
+
+**注意**: 向量的 ID 由服务端自动生成，客户端无需提供。
 
 #### 5.2 嵌入并搜索
 
@@ -285,7 +438,22 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "id": 5,
+        "distance": 0.234,
+        "metadata": {"category": "document"}
+      }
+    ]
+  },
+  "error": null
+}
+```
 
 #### 5.3 文本嵌入
 
@@ -302,7 +470,22 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "text": "文本1",
+        "embedding": [0.1, 0.2, 0.3, ...],
+        "index": 0
+      }
+    ]
+  },
+  "error": null
+}
+```
 
 #### 5.4 列出嵌入模型
 
@@ -312,7 +495,25 @@ Authorization: Bearer <token>
 
 **认证**: 需要
 
-**响应**: 200 OK
+**响应示例**: 200 OK
+```json
+{
+  "success": true,
+  "data": {
+    "models": [
+      {
+        "id": "text-embedding-ada-002",
+        "name": "OpenAI Ada 002",
+        "dimension": 1536,
+        "available": true,
+        "description": "OpenAI text embedding model"
+      }
+    ],
+    "default_model": "text-embedding-ada-002"
+  },
+  "error": null
+}
+```
 
 ---
 
@@ -355,7 +556,6 @@ curl -X POST http://localhost:8080/api/v1/databases/my_database/collections/my_c
   -d '{
     "vectors": [
       {
-        "id": "vec1",
         "values": [0.1, 0.2, 0.3],
         "metadata": {"category": "test"}
       }
@@ -374,9 +574,3 @@ curl -X POST http://localhost:8080/api/v1/databases/my_database/collections/my_c
     "top_k": 5
   }'
 ```
-
-## 版本信息
-
-- **API 版本**: v1
-- **文档版本**: 1.0.0
-- **最后更新**: 2024-07-29
