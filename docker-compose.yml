@@ -2,13 +2,7 @@ version: '3.8'
 
 services:
   scintirete:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VERSION: ${VERSION:-dev}
-        COMMIT: ${COMMIT:-unknown}
-    image: scintirete:latest
+    image: ghcr.io/scintirete/scintirete:latest
     container_name: scintirete-server
     restart: unless-stopped
     ports:
@@ -16,12 +10,9 @@ services:
       - "9090:9090"   # gRPC Server
       - "9100:9100"   # Metrics
     volumes:
-      - scintirete_data:/app/data
+      - ./data:/app/data
       # Mount your scintirete.toml config file (copy from scintirete.template.toml)
       - ./configs/scintirete.toml:/app/configs/scintirete.toml:ro
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - SCINTIRETE_LOG_LEVEL=${LOG_LEVEL:-info}
     networks:
       - scintirete-network
     healthcheck:
@@ -32,58 +23,58 @@ services:
       start_period: 30s
 
   # Optional: Prometheus for metrics collection
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: scintirete-prometheus
-    restart: unless-stopped
-    ports:
-      - "9091:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    networks:
-      - scintirete-network
-    depends_on:
-      - scintirete
-    profiles:
-      - monitoring
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: scintirete-prometheus
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9091:9090"
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus_data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/etc/prometheus/console_libraries'
+  #     - '--web.console.templates=/etc/prometheus/consoles'
+  #     - '--storage.tsdb.retention.time=200h'
+  #     - '--web.enable-lifecycle'
+  #   networks:
+  #     - scintirete-network
+  #   depends_on:
+  #     - scintirete
+  #   profiles:
+  #     - monitoring
 
-  # Optional: Grafana for metrics visualization
-  grafana:
-    image: grafana/grafana:latest
-    container_name: scintirete-grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
-      - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
-      - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    networks:
-      - scintirete-network
-    depends_on:
-      - prometheus
-    profiles:
-      - monitoring
+  # # Optional: Grafana for metrics visualization
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: scintirete-grafana
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+  #     - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+  #     - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   networks:
+  #     - scintirete-network
+  #   depends_on:
+  #     - prometheus
+  #   profiles:
+  #     - monitoring
 
-volumes:
-  scintirete_data:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
+# volumes:
+#   scintirete_data:
+#     driver: local
+#   prometheus_data:
+#     driver: local
+#   grafana_data:
+#     driver: local
 
 networks:
   scintirete-network:
