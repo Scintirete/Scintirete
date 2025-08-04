@@ -6,9 +6,10 @@ ManagerUI 是 Scintirete 的 Web 管理界面，提供直观的可视化操作�
 
 ### 在线体验版
 
-**临时访问地址**: [http://scintirete-manager-ui.cloud.wj2015.com/](http://scintirete-manager-ui.cloud.wj2015.com/)
+**临时云端访问地址**: [http://scintirete-manager-ui.cloud.wj2015.com/](http://scintirete-manager-ui.cloud.wj2015.com/)
 
 > ⚠️ **安全限制**: 在线体验版出于安全考虑，仅支持客户端直连模式，不支持服务器转发模式。本地部署版本支持全部功能。
+> ⚠️ **访问地址**: 正式访问地址正在进行域名备案，请耐心等待。
 
 ### 本地部署
 
@@ -31,13 +32,13 @@ docker run -d \
 
 在浏览器中访问 ManagerUI 地址，你将看到连接配置页面：
 
-![ManagerUI 首页](../screenshots/manager-home.png)
+![ManagerUI 首页](../../screenshots/manager-home.png)
 
 ### 2. 配置服务器连接
 
 首次使用需要配置连接到 Scintirete 服务器：
 
-![连接配置界面](../screenshots/manager-add-connection.png)  
+![连接配置界面](../../screenshots/manager-add-connection.png)  
 
 **连接参数说明**：
 
@@ -102,7 +103,7 @@ ManagerUI 会将连接配置安全保存到浏览器的 `localStorage` 中：
 
 点击"创建数据库"按钮：
 
-![创建数据库对话框](../screenshots/manager-create-db.png)
+![创建数据库对话框](../../screenshots/manager-create-db.png)
 
 **创建步骤**：
 1. 输入数据库名称（支持中英文）
@@ -116,7 +117,7 @@ ManagerUI 会将连接配置安全保存到浏览器的 `localStorage` 中：
 
 点击数据库进入集合管理界面：
 
-![集合信息界面](../screenshots/manager-collections-list.png)
+![集合信息界面](../../screenshots/manager-collections-list.png)
 
 **信息展示**：
 - 📏 **向量维度**: 显示集合中向量的维度
@@ -129,7 +130,7 @@ ManagerUI 会将连接配置安全保存到浏览器的 `localStorage` 中：
 
 在数据库内创建新集合：
 
-![创建集合表单](../screenshots/manager-create-collections.png)
+![创建集合表单](../../screenshots/manager-create-collections.png)
 
 **配置选项**：
 - **集合名称**: 英文字母、数字、下划线
@@ -145,17 +146,17 @@ ManagerUI 会将连接配置安全保存到浏览器的 `localStorage` 中：
 
 ManagerUI 支持灵活的向量数据插入：
 
-![向量插入界面](../screenshots/manager-collections-insert.png)
+![向量插入界面](../../screenshots/manager-collections-insert.png)
 
 ### 向量搜索功能
 
 文本语义搜索功能：
 
-![向量搜索界面](../screenshots/manager-collections-search.png)
+![向量搜索界面](../../screenshots/manager-collections-search.png)
 
 ### 向量删除
 
-![向量删除界面](../screenshots/manager-collections-del-vec.png)
+![向量删除界面](../../screenshots/manager-collections-del-vec.png)
 
 ## 🔧 故障排除
 

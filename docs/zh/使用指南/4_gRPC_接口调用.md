@@ -31,21 +31,21 @@ Scintirete gRPC 服务**启用了服务器反射**，这意味着你可以直接
 3. 选择 **"服务器反射"** 方式
 4. 输入服务器地址：`localhost:9090`
 
-![Apifox 创建项目](../screenshots/apifox-create-project.png)
+![Apifox 创建项目](../../screenshots/apifox-create-project.png)
 
 ### 2. 配置 proto
 
-![Apifox 配置 proto](../screenshots/apifox-add-protos.png)
+![Apifox 配置 proto](../../screenshots/apifox-add-protos.png)
 
 ### 3. 服务接口概览
 
 导入成功后，你将看到以下服务接口：
 
-![Apifox 服务列表](../screenshots/apifox-api-list.png)
+![Apifox 服务列表](../../screenshots/apifox-api-list.png)
 
 ### 4. 调用接口
 
-![Apifox 调用接口](../screenshots/apifox-invoke.png)
+![Apifox 调用接口](../../screenshots/apifox-invoke.png)
 
 ## 📊 性能对比
 
