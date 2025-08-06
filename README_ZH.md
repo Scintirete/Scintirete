@@ -12,9 +12,11 @@ Scintirete 是一款基于 HNSW（分层导航小世界）算法实现的轻量�
 
 **核心理念：** 点亮数据之网，发现无限近邻。
 
-【临时】官网：[scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/zh/)
+## 开源生态
 
-【临时】数据库管理系统（DBMS）：[scintirete-manager-ui.cloud.wj2015.com](http://scintirete-manager-ui.cloud.wj2015.com/)
+【临时】官网：[scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/zh/)（[开源地址](https://github.com/Scintirete/webapp)）
+
+【临时】数据库管理系统（DBMS）：[scintirete-manager-ui.cloud.wj2015.com](http://scintirete-manager-ui.cloud.wj2015.com/)（[开源地址](https://github.com/Scintirete/scintirete-manager-ui)）
 
 正式官网备案中，暂时无法访问：[scintirete.top](https://scintirete.top)
 
