@@ -12,6 +12,12 @@ Scintirete is a lightweight, production-ready vector database built on the HNSW 
 
 **Core Philosophy:** Discover infinite neighbors, illuminate the data network.
 
+【Temporary】Website: [scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/)
+
+【Temporary】Database Management System (DBMS): [scintirete-manager-ui.cloud.wj2015.com](http://scintirete-manager-ui.cloud.wj2015.com/)
+
+Official website is under review, please visit [scintirete.top](https://scintirete.top) for more information.
+
 ## Features
 
 - **Lightweight & Simple**: Self-contained implementation focused on core vector search functionality with minimal dependencies
