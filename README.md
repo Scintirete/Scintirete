@@ -14,7 +14,7 @@ Scintirete is a lightweight, production-ready vector database built on the HNSW 
 
 ## Open Source Ecosystem
 
-【Temporary】Website: [scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/) ([Source Code](https://github.com/Scintirete/webapp))
+【Temporary】Website and Documentation: [scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/) ([Source Code](https://github.com/Scintirete/webapp))
 
 【Temporary】Database Management System (DBMS): [scintirete-manager-ui.cloud.wj2015.com](http://scintirete-manager-ui.cloud.wj2015.com/) ([Source Code](https://github.com/Scintirete/scintirete-manager-ui))
 
@@ -147,7 +147,7 @@ If you have pre-computed vectors:
   --top-k 3
 ```
 
-More documentation can be found in the [docs/](docs/) directory.
+More documentation can be found in the [http://scintirete.cloud.wj2015.com/docs](http://scintirete.cloud.wj2015.com/docs) directory.
 
 ## Architecture
 
@@ -159,7 +159,7 @@ Scintirete implements a modern vector database architecture with the following c
 - **Embedding Integration**: OpenAI-compatible API integration for automatic text vectorization
 - **Observability**: Comprehensive logging, audit logs, and metrics
 
-For detailed technical documentation, see the [docs/](docs/) directory.
+For detailed technical documentation, see the [http://scintirete.cloud.wj2015.com/docs](http://scintirete.cloud.wj2015.com/docs) directory.
 
 ## Configuration
 
@@ -196,7 +196,7 @@ Scintirete provides both gRPC and HTTP/JSON APIs:
 - **gRPC**: High-performance interface defined in [protobuf](schemas/proto/scintirete/v1/scintirete.proto)
 - **HTTP/JSON**: RESTful interface accessible at `http://localhost:8080/`
 
-For comprehensive API documentation and usage examples, refer to the [documentation](docs/).
+For comprehensive API documentation and usage examples, refer to the [documentation](http://scintirete.cloud.wj2015.com/docs).
 
 ## Performance Considerations
 
@@ -253,7 +253,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Documentation**: [Documentation](docs/)
+- **Documentation**: [Documentation](http://scintirete.cloud.wj2015.com/docs)
 - **Issues**: [GitHub Issues](https://github.com/scintirete/scintirete/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/scintirete/scintirete/discussions)
 
