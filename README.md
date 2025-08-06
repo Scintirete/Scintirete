@@ -14,7 +14,7 @@ Scintirete is a lightweight, production-ready vector database built on the HNSW 
 
 ## Open Source Ecosystem
 
-【Temporary】Website: [scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/) ([Source Code](https://github.com/Scintirete/webapp))
+【Temporary】Website and Documentation: [scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/) ([Source Code](https://github.com/Scintirete/webapp))
 
 【Temporary】Database Management System (DBMS): [scintirete-manager-ui.cloud.wj2015.com](http://scintirete-manager-ui.cloud.wj2015.com/) ([Source Code](https://github.com/Scintirete/scintirete-manager-ui))
 
