@@ -32,6 +32,13 @@ Official website is under review, unavailable for now: [scintirete.top](https://
 
 Scintirete targets small to medium-scale projects, edge computing scenarios, and developers who need rapid prototyping with a reliable, high-performance, and maintainable vector search solution.
 
+## Roadmap
+
+- [ ] Provide upstream framework integrations, such as langchain, langgraph, etc.
+- [ ] Implement some killer features in the webapp for reference experience, such as movie recommendation, face recognition, knowledge base question-answering, etc.
+- [ ] Run the full project smoothly on Raspberry Pi
+- [ ] Provide multi-language SDK based on protobuf
+
 ## Quick Start
 
 ### Prerequisites
