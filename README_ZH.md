@@ -27,7 +27,7 @@ Scintirete 是一款基于 HNSW（分层导航小世界）算法实现的轻量�
 - **数据安全**: 基于 flatbuffers 实现了类似于 Redis 的 AOF + RDB 高效持久化机制，确保数据万无一失
 - **现代接口**: 原生支持 gRPC 和 HTTP/JSON 双接口，易于集成到任何现代应用架构中
 - **易于运维**: 提供结构化日志、审计日志、Prometheus 指标和便捷的命令行工具，为生产环境而设计
-- **跨平台**: 支持 Linux、macOS、Windows 及 arm64 、amd64 架构开箱即用
+- **跨平台**: 支持 Linux、macOS、Windows 及 arm64 、amd64 架构开箱即用，为树莓派设备提供优化构建
 - **支持文本嵌入**: 支持 OpenAI 兼容 API 集成，支持自动文本向量化
 
 Scintirete 的目标是为中小型项目、边缘计算场景以及需要快速原型验证的开发者，提供一个开箱即用、性能卓越且易于维护的向量搜索解决方案。
@@ -36,7 +36,7 @@ Scintirete 的目标是为中小型项目、边缘计算场景以及需要快速
 
 - [ ] 提供上下游框架集成，如 langchain、langgraph 等
 - [ ] 在 webapp 中实现一些杀手级功能供参考体验，如电影推荐、人脸识别、知识库问答等
-- [ ] 在树莓派上流畅运行全套项目
+- [x] 在树莓派上流畅运行全套项目
 - [ ] 基于 protobuf 提供多语言SDK
 
 
@@ -53,6 +53,26 @@ Scintirete 的目标是为中小型项目、边缘计算场景以及需要快速
 
 从 [releases 页面](https://github.com/scintirete/scintirete/releases) 下载最新版本。
 
+**平台支持：**
+
+| 平台 | 架构 | 二进制包 | 支持设备 |
+|------|------|----------|----------|
+| **Linux (x86_64)** | amd64 | `scintirete-linux-amd64.tar.gz` | 标准服务器、PC |
+| **Linux (ARM64)** | arm64 | `scintirete-linux-arm64-pi45.tar.gz` | 树莓派 3/4/5, Zero 2W（64位系统） |
+| **Linux (ARM v7)** | arm | `scintirete-linux-arm-pi23.tar.gz` | 树莓派 2/3/4/5, Zero 2W（32位系统） |
+| **Linux (ARM v6)** | arm | `scintirete-linux-arm-pi1.tar.gz` | 树莓派 1, Zero, Zero W |
+| **Windows** | amd64/arm64 | `scintirete-windows-*.zip` | Windows PC |
+| **macOS** | amd64/arm64 | `scintirete-darwin-*.tar.gz` | Intel Mac、Apple Silicon |
+
+**树莓派快速参考：**
+
+| 树莓派型号 | CPU 核心架构 | 常见 OS 位数 | Go 编译参数 | Docker 架构标识 |
+|------------|-------------|-------------|-------------|----------------|
+| Pi 1, Pi Zero, Pi Zero W | ARMv6 (32-bit) | 32-bit | `GOARCH=arm, GOARM=6` | `linux/arm/v6` |
+| Pi 2 (Rev 1.1) | ARMv7 (32-bit) | 32-bit | `GOARCH=arm, GOARM=7` | `linux/arm/v7` |
+| Pi 3, Pi 4, Pi 5, Zero 2 W | ARMv8 (64-bit capable) | 32-bit OS（如旧版 Raspberry Pi OS） | `GOARCH=arm, GOARM=7`（运行在兼容模式） | `linux/arm/v7` |
+| Pi 3, Pi 4, Pi 5, Zero 2 W | ARMv8 (AArch64) | 64-bit OS（如新版 Raspberry Pi OS） | `GOARCH=arm64` | `linux/arm64` |
+
 #### 选项 2：从源码构建
 
 ```bash
@@ -63,9 +83,23 @@ make all
 
 #### 选项 3：Docker
 
+Docker 镜像支持多种架构，会自动选择适合的架构：
+
 ```bash
+# 拉取最新版本（自动选择架构）
 docker pull ghcr.io/scintirete/scintirete:latest
+
+# 显式指定架构（如果需要）
+docker pull --platform linux/arm64 ghcr.io/scintirete/scintirete:latest    # Pi 3/4/5（64位）
+docker pull --platform linux/arm/v7 ghcr.io/scintirete/scintirete:latest   # Pi 2/3/4/5（32位）
+docker pull --platform linux/arm/v6 ghcr.io/scintirete/scintirete:latest   # Pi 1/Zero/Zero W
 ```
+
+**支持的 Docker 架构：**
+- `linux/amd64` - x86_64 平台
+- `linux/arm64` - ARM64 平台（树莓派 3/4/5, Zero 2W 64位系统）
+- `linux/arm/v7` - ARM v7 平台（树莓派 2/3/4/5, Zero 2W 32位系统）
+- `linux/arm/v6` - ARM v6 平台（树莓派 1, Zero, Zero W）
 
 ### 基本使用
 

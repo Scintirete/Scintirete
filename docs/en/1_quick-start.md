@@ -9,8 +9,8 @@ This guide will help you launch and experience Scintirete within 3 minutes.
 The simplest way to start is using the pre-built Docker image:
 
 ```bash
-# Pull the latest image
-docker pull scintirete/scintirete:latest
+# Pull the latest image (supports multi-architecture, including Raspberry Pi)
+docker pull ghcr.io/scintirete/scintirete:latest
 
 wget https://raw.githubusercontent.com/Scintirete/Scintirete/refs/heads/main/configs/scintirete.template.toml -O scintirete.toml
 
@@ -21,7 +21,7 @@ docker run -d \
   -p 9090:9090 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/scintirete.toml:/app/configs/scintirete.toml \
-  scintirete/scintirete:latest
+  ghcr.io/scintirete/scintirete:latest
 ```
 
 ### Option 2: Using Docker Compose
