@@ -190,41 +190,71 @@ jobs:
         echo "Downloaded artifacts structure:"
         ls -la ./artifacts/
         
-        # Map artifacts to Docker platforms and extract binaries
-        declare -A platform_map=(
-          ["scintirete-linux-amd64"]="amd64"
-          ["scintirete-linux-arm64"]="arm64"
-          ["scintirete-linux-arm-arm7"]="arm-v7"
-          ["scintirete-linux-arm-arm6"]="arm-v6"
-        )
-        
-        for artifact_name in "${!platform_map[@]}"; do
-          docker_platform="${platform_map[$artifact_name]}"
-          artifact_path="./artifacts/$artifact_name"
-          
-          echo "Processing $artifact_name -> $docker_platform"
-          
-          if [ ! -d "$artifact_path" ]; then
-            echo "Warning: Artifact directory $artifact_path not found"
+        # Process each artifact directory and map to Docker platforms
+        for artifact_dir in ./artifacts/scintirete-*; do
+          if [ ! -d "$artifact_dir" ]; then
             continue
           fi
           
+          artifact_name=$(basename "$artifact_dir")
+          echo "Processing artifact: $artifact_name"
+          
+          # Determine Docker platform from artifact name
+          case "$artifact_name" in
+            "scintirete-linux-amd64")
+              docker_platform="amd64"
+              ;;
+            "scintirete-linux-arm64")
+              docker_platform="arm64"
+              ;;
+            "scintirete-linux-arm-arm7")
+              docker_platform="arm-v7"
+              ;;
+            "scintirete-linux-arm-arm6")
+              docker_platform="arm-v6"
+              ;;
+            *)
+              echo "Skipping unknown artifact: $artifact_name"
+              continue
+              ;;
+          esac
+          
+          echo "Mapping to Docker platform: $docker_platform"
+          
           # Find the archive in the artifact directory
-          archive=$(find "$artifact_path" -name "*.tar.gz" | head -1)
+          archive=$(find "$artifact_dir" -name "*.tar.gz" | head -1)
           if [ -z "$archive" ]; then
-            echo "Warning: No tar.gz found in $artifact_path"
-            ls -la "$artifact_path"
+            echo "Warning: No tar.gz found in $artifact_dir"
+            ls -la "$artifact_dir"
             continue
           fi
           
           echo "Extracting $archive"
           
-          # Extract directly to docker-build with specific naming
-          tar -xzf "$archive" -C docker-build
+          # Create temporary directory for extraction
+          temp_dir=$(mktemp -d)
+          tar -xzf "$archive" -C "$temp_dir"
           
-          # Rename binaries to match Docker platform expectations
-          mv docker-build/scintirete-server-* docker-build/scintirete-server-linux-${docker_platform} 2>/dev/null || true
-          mv docker-build/scintirete-cli-* docker-build/scintirete-cli-linux-${docker_platform} 2>/dev/null || true
+          # Find and copy binaries with correct naming
+          server_binary=$(find "$temp_dir" -name "scintirete-server-*" -type f | head -1)
+          cli_binary=$(find "$temp_dir" -name "scintirete-cli-*" -type f | head -1)
+          
+          if [ -n "$server_binary" ]; then
+            cp "$server_binary" "docker-build/scintirete-server-linux-${docker_platform}"
+            echo "  ✓ Copied server binary: $(basename "$server_binary") -> scintirete-server-linux-${docker_platform}"
+          else
+            echo "  ❌ Server binary not found in $temp_dir"
+          fi
+          
+          if [ -n "$cli_binary" ]; then
+            cp "$cli_binary" "docker-build/scintirete-cli-linux-${docker_platform}"
+            echo "  ✓ Copied CLI binary: $(basename "$cli_binary") -> scintirete-cli-linux-${docker_platform}"
+          else
+            echo "  ❌ CLI binary not found in $temp_dir"
+          fi
+          
+          # Cleanup temp directory
+          rm -rf "$temp_dir"
         done
         
         echo "Final binary inventory:"
