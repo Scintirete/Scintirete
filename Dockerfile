@@ -4,6 +4,10 @@ FROM golang:1.24-alpine AS builder
 # Build arguments
 ARG VERSION=dev
 ARG COMMIT=unknown
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -38,14 +42,23 @@ RUN make proto-gen
 # Generate flatbuffers code
 RUN make flatbuffers-gen
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
-    -o scintirete-server ./cmd/scintirete-server
-
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
-    -o scintirete-cli ./cmd/scintirete-cli
+# Set GOARM based on TARGETVARIANT for ARM builds
+RUN if [ "$TARGETARCH" = "arm" ]; then \
+        if [ "$TARGETVARIANT" = "v6" ]; then \
+            export GOARM=6; \
+        elif [ "$TARGETVARIANT" = "v7" ]; then \
+            export GOARM=7; \
+        else \
+            export GOARM=7; \
+        fi; \
+    fi && \
+    echo "Building for platform: $TARGETPLATFORM (OS: $TARGETOS, ARCH: $TARGETARCH, VARIANT: $TARGETVARIANT, GOARM: $GOARM)" && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
+        -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
+        -o scintirete-server ./cmd/scintirete-server && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
+        -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
+        -o scintirete-cli ./cmd/scintirete-cli
 
 # Production stage
 FROM alpine:latest

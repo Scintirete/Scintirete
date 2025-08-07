@@ -12,23 +12,53 @@ Scintirete supports the following operating systems:
 |------------------|--------------|-----------------|-------------------|
 | **Linux** | x86_64 | Ubuntu 18.04, CentOS 7 | Ubuntu 20.04+, CentOS 8+ |
 | **Linux** | ARM64 | Ubuntu 18.04, CentOS 7 | Ubuntu 20.04+, CentOS 8+ |
+| **Linux** | ARM v7 | Raspberry Pi OS (32-bit) | Raspberry Pi OS (latest) |
+| **Linux** | ARM v6 | Raspberry Pi OS (32-bit) | Raspberry Pi OS (latest) |
 | **macOS** | x86_64 | macOS 10.15 (Catalina) | macOS 12.0+ (Monterey) |
 | **macOS** | ARM64 (M1/M2) | macOS 11.0 (Big Sur) | macOS 12.0+ (Monterey) |
 | **Windows** | x86_64 | Windows 10 | Windows 11 |
 
+### 🍓 Raspberry Pi Dedicated Support
+
+Scintirete provides native optimized support for Raspberry Pi devices:
+
+| Raspberry Pi Model | CPU Architecture | Supported OS | Binary Package | Docker Architecture |
+|-------------------|------------------|--------------|----------------|-------------------|
+| **Pi 1, Zero, Zero W** | ARMv6 (32-bit) | Raspberry Pi OS (32-bit) | `scintirete-linux-arm-pi1.tar.gz` | `linux/arm/v6` |
+| **Pi 2 (Rev 1.1)** | ARMv7 (32-bit) | Raspberry Pi OS (32-bit) | `scintirete-linux-arm-pi23.tar.gz` | `linux/arm/v7` |
+| **Pi 3, 4, 5, Zero 2W** | ARMv8 (64-bit capable) | Raspberry Pi OS (32-bit) | `scintirete-linux-arm-pi23.tar.gz` | `linux/arm/v7` |
+| **Pi 3, 4, 5, Zero 2W** | ARMv8 (AArch64) | Raspberry Pi OS (64-bit) | `scintirete-linux-arm64-pi45.tar.gz` | `linux/arm64` |
+
+**Raspberry Pi Performance Reference:**
+- **Pi 4 (4GB+)**: Suitable for small to medium vector databases (< 1M vectors)
+- **Pi 5 (8GB)**: Suitable for larger scale deployments (1M+ vectors)
+- **Pi Zero series**: Ideal for edge computing and prototyping
+- **Recommended storage**: microSD card (Class 10 or A1/A2), or USB 3.0 SSD
+
 ### Hardware Requirements
 
 #### Minimum Configuration
-- **CPU**: 1 core (x86_64 or ARM64)
+- **CPU**: 1 core (x86_64, ARM64, ARMv7, or ARMv6)
 - **Memory**: 512 MB RAM
 - **Storage**: 100 MB available disk space
 - **Network**: TCP/IP support
 
 #### Recommended Configuration
-- **CPU**: 2+ cores (x86_64 or ARM64)
+- **CPU**: 2+ cores (x86_64, ARM64, or ARMv7)
 - **Memory**: 2 GB+ RAM
 - **Storage**: 1 GB+ SSD storage
 - **Network**: Gigabit Ethernet
+
+#### Raspberry Pi Specific Configuration Recommendations
+
+| Raspberry Pi Model | Recommended Memory | Suitable Data Scale | Storage Recommendations |
+|-------------------|-------------------|-------------------|------------------------|
+| **Pi 1, Zero, Zero W** | 512MB (system limit) | < 100K vectors | microSD Class 10 |
+| **Pi 2** | 1GB (system limit) | < 500K vectors | microSD Class 10 + USB storage |
+| **Pi 3** | 1GB (system limit) | < 500K vectors | microSD Class 10 + USB 3.0 SSD |
+| **Pi 4 (4GB)** | 4GB | < 1M vectors | USB 3.0 SSD recommended |
+| **Pi 4 (8GB)** | 8GB | 1M+ vectors | USB 3.0 SSD recommended |
+| **Pi 5 (4GB/8GB)** | 4GB/8GB | 1M+ vectors | USB 3.0 SSD or NVMe |
 
 ## 🧮 Memory Calculation Guide
 

@@ -1,0 +1,62 @@
+# Runtime-only Dockerfile for Scintirete
+# This dockerfile is used for multi-architecture builds where we copy pre-compiled binaries
+FROM alpine:latest
+
+# Build arguments
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+# Install minimal runtime dependencies
+RUN apk --no-cache add ca-certificates tzdata
+
+# Create non-root user
+RUN addgroup -g 1000 scintirete && \
+    adduser -D -s /bin/sh -u 1000 -G scintirete scintirete
+
+# Set working directory
+WORKDIR /app
+
+# Copy pre-compiled binaries based on target architecture
+# These binaries are extracted from release artifacts
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        echo "Using amd64 binaries"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Using arm64 binaries"; \
+    elif [ "$TARGETARCH" = "arm" ] && [ "$TARGETVARIANT" = "v7" ]; then \
+        echo "Using armv7 binaries"; \
+    elif [ "$TARGETARCH" = "arm" ] && [ "$TARGETVARIANT" = "v6" ]; then \
+        echo "Using armv6 binaries"; \
+    else \
+        echo "Unknown architecture: $TARGETARCH $TARGETVARIANT"; exit 1; \
+    fi
+
+COPY docker-build/scintirete-server-linux-${TARGETARCH}${TARGETVARIANT:+-${TARGETVARIANT}} ./scintirete-server
+COPY docker-build/scintirete-cli-linux-${TARGETARCH}${TARGETVARIANT:+-${TARGETVARIANT}} ./scintirete-cli
+
+# Copy configuration template
+COPY configs/scintirete.template.toml ./configs/
+
+# Create data directory and set permissions
+RUN mkdir -p /app/data && \
+    chown -R scintirete:scintirete /app && \
+    chmod +x scintirete-server scintirete-cli
+
+# Switch to non-root user
+USER scintirete
+
+# Expose ports
+EXPOSE 8080 9090 9100
+
+# Create volume for data persistence
+VOLUME ["/app/data"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD ./scintirete-cli --help > /dev/null || exit 1
+
+# Default command (expects scintirete.toml to be mounted or created from template)
+CMD ["./scintirete-server", "--config", "configs/scintirete.toml"]

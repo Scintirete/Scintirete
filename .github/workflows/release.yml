@@ -31,6 +31,13 @@ jobs:
             goarm: 7
             suffix: ""
           
+          # Raspberry Pi specific builds
+          - goos: linux
+            goarch: arm
+            goarm: 6
+            suffix: ""
+            # Pi 1, Pi Zero, Pi Zero W (ARMv6)
+          
           # Windows
           - goos: windows
             goarch: amd64
@@ -107,45 +114,164 @@ jobs:
         VERSION=${GITHUB_REF_NAME#v}
         COMMIT=${GITHUB_SHA}
         
+        # Determine architecture suffix for Raspberry Pi builds
+        ARCH_SUFFIX=""
+        if [ "${{ matrix.goarch }}" = "arm" ] && [ "${{ matrix.goarm }}" = "6" ]; then
+          ARCH_SUFFIX="-pi1"
+        elif [ "${{ matrix.goarch }}" = "arm" ] && [ "${{ matrix.goarm }}" = "7" ]; then
+          ARCH_SUFFIX="-pi23"
+        elif [ "${{ matrix.goarch }}" = "arm64" ]; then
+          ARCH_SUFFIX="-pi45"
+        fi
+        
         # Build server binary
         CGO_ENABLED=0 go build \
           -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
-          -o dist/scintirete-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
+          -o dist/scintirete-server-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}${{ matrix.suffix }} \
           ./cmd/scintirete-server
         
         # Build CLI binary
         CGO_ENABLED=0 go build \
           -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
-          -o dist/scintirete-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
+          -o dist/scintirete-cli-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}${{ matrix.suffix }} \
           ./cmd/scintirete-cli
 
     - name: Create archive
       run: |
         cd dist
+        # Determine architecture suffix for Raspberry Pi builds
+        ARCH_SUFFIX=""
+        if [ "${{ matrix.goarch }}" = "arm" ] && [ "${{ matrix.goarm }}" = "6" ]; then
+          ARCH_SUFFIX="-pi1"
+        elif [ "${{ matrix.goarch }}" = "arm" ] && [ "${{ matrix.goarm }}" = "7" ]; then
+          ARCH_SUFFIX="-pi23"
+        elif [ "${{ matrix.goarch }}" = "arm64" ]; then
+          ARCH_SUFFIX="-pi45"
+        fi
+        
         if [ "${{ matrix.goos }}" = "windows" ]; then
           # Create zip for Windows
-          zip scintirete-${{ matrix.goos }}-${{ matrix.goarch }}.zip \
-            scintirete-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
-            scintirete-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+          zip scintirete-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}.zip \
+            scintirete-server-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}${{ matrix.suffix }} \
+            scintirete-cli-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}${{ matrix.suffix }}
         else
           # Create tar.gz for Unix-like systems
-          tar -czf scintirete-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz \
-            scintirete-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
-            scintirete-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+          tar -czf scintirete-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}.tar.gz \
+            scintirete-server-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}${{ matrix.suffix }} \
+            scintirete-cli-${{ matrix.goos }}-${{ matrix.goarch }}${ARCH_SUFFIX}${{ matrix.suffix }}
         fi
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: scintirete-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: dist/scintirete-${{ matrix.goos }}-${{ matrix.goarch }}.*
+        name: scintirete-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm != '' && format('-arm{0}', matrix.goarm) || '' }}
+        path: dist/scintirete-${{ matrix.goos }}-${{ matrix.goarch }}*.*
 
   # Docker 镜像构建和推送
   docker:
+    needs: release
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Download release artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: scintirete-linux-*
+        path: ./artifacts
+        merge-multiple: false
+
+    - name: Prepare Docker build context from artifacts
+      run: |
+        # Create docker-build directory
+        mkdir -p docker-build
+        
+        echo "Downloaded artifacts structure:"
+        ls -la ./artifacts/
+        
+        # Process each artifact directory and map to Docker platforms
+        for artifact_dir in ./artifacts/scintirete-*; do
+          if [ ! -d "$artifact_dir" ]; then
+            continue
+          fi
+          
+          artifact_name=$(basename "$artifact_dir")
+          echo "Processing artifact: $artifact_name"
+          
+          # Determine Docker platform from artifact name
+          case "$artifact_name" in
+            "scintirete-linux-amd64")
+              docker_platform="amd64"
+              ;;
+            "scintirete-linux-arm64")
+              docker_platform="arm64"
+              ;;
+            "scintirete-linux-arm-arm7")
+              docker_platform="arm-v7"
+              ;;
+            "scintirete-linux-arm-arm6")
+              docker_platform="arm-v6"
+              ;;
+            *)
+              echo "Skipping unknown artifact: $artifact_name"
+              continue
+              ;;
+          esac
+          
+          echo "Mapping to Docker platform: $docker_platform"
+          
+          # Find the archive in the artifact directory
+          archive=$(find "$artifact_dir" -name "*.tar.gz" | head -1)
+          if [ -z "$archive" ]; then
+            echo "Warning: No tar.gz found in $artifact_dir"
+            ls -la "$artifact_dir"
+            continue
+          fi
+          
+          echo "Extracting $archive"
+          
+          # Create temporary directory for extraction
+          temp_dir=$(mktemp -d)
+          tar -xzf "$archive" -C "$temp_dir"
+          
+          # Find and copy binaries with correct naming
+          server_binary=$(find "$temp_dir" -name "scintirete-server-*" -type f | head -1)
+          cli_binary=$(find "$temp_dir" -name "scintirete-cli-*" -type f | head -1)
+          
+          if [ -n "$server_binary" ]; then
+            cp "$server_binary" "docker-build/scintirete-server-linux-${docker_platform}"
+            echo "  ✓ Copied server binary: $(basename "$server_binary") -> scintirete-server-linux-${docker_platform}"
+          else
+            echo "  ❌ Server binary not found in $temp_dir"
+          fi
+          
+          if [ -n "$cli_binary" ]; then
+            cp "$cli_binary" "docker-build/scintirete-cli-linux-${docker_platform}"
+            echo "  ✓ Copied CLI binary: $(basename "$cli_binary") -> scintirete-cli-linux-${docker_platform}"
+          else
+            echo "  ❌ CLI binary not found in $temp_dir"
+          fi
+          
+          # Cleanup temp directory
+          rm -rf "$temp_dir"
+        done
+        
+        echo "Final binary inventory:"
+        ls -la docker-build/
+        
+        # Verify all required binaries exist
+        for platform in "amd64" "arm64" "arm-v7" "arm-v6"; do
+          if [ ! -f "docker-build/scintirete-server-linux-${platform}" ]; then
+            echo "ERROR: Missing scintirete-server-linux-${platform}"
+            exit 1
+          fi
+          if [ ! -f "docker-build/scintirete-cli-linux-${platform}" ]; then
+            echo "ERROR: Missing scintirete-cli-linux-${platform}"
+            exit 1
+          fi
+          echo "✓ Binaries for ${platform} are ready"
+        done
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -169,11 +295,12 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
+    - name: Build and push multi-architecture Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
-        platforms: linux/amd64,linux/arm64
+        file: ./Dockerfile.runtime
+        platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
@@ -211,8 +338,9 @@ jobs:
         
         #### Linux
         - `scintirete-linux-amd64.tar.gz` - Linux x86_64
-        - `scintirete-linux-arm64.tar.gz` - Linux ARM64
-        - `scintirete-linux-arm.tar.gz` - Linux ARM v7
+        - `scintirete-linux-arm64-pi45.tar.gz` - Linux ARM64 (树莓派 3/4/5, Zero 2W 64位系统)
+        - `scintirete-linux-arm-pi23.tar.gz` - Linux ARM v7 (树莓派 2/3/4/5, Zero 2W 32位系统)
+        - `scintirete-linux-arm-pi1.tar.gz` - Linux ARM v6 (树莓派 1, Zero, Zero W)
         
         #### Windows
         - `scintirete-windows-amd64.zip` - Windows x86_64
@@ -228,10 +356,16 @@ jobs:
         
         ### 🐳 Docker 镜像
         
-        Docker 镜像已自动推送到 GitHub Container Registry：
+        Docker 镜像已自动推送到 GitHub Container Registry，支持多种架构：
+        
+        **支持的架构：**
+        - `linux/amd64` - x86_64 平台
+        - `linux/arm64` - ARM64 平台（树莓派 3/4/5, Zero 2W 64位系统）
+        - `linux/arm/v7` - ARM v7 平台（树莓派 2/3/4/5, Zero 2W 32位系统）
+        - `linux/arm/v6` - ARM v6 平台（树莓派 1, Zero, Zero W）
         
         ```bash
-        # 拉取最新版本
+        # 拉取最新版本（Docker 会自动选择适合的架构）
         docker pull ghcr.io/scintirete/scintirete:${{ github.ref_name }}
         
         # 拉取 latest 版本（如果是默认分支）

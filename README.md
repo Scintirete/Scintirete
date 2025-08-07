@@ -27,7 +27,7 @@ Official website is under review, unavailable for now: [scintirete.top](https://
 - **Data Safety**: Based on flatbuffers, implements a Redis-like AOF + RDB persistence mechanism to ensure data durability
 - **Modern APIs**: Native support for both gRPC and HTTP/JSON interfaces for seamless integration
 - **Production Ready**: Structured logging, audit logs, Prometheus metrics, and comprehensive CLI tools designed for production environments
-- **Cross-platform**: Support Linux, macOS, Windows, arm64, amd64 architectures out of the box
+- **Cross-platform**: Support Linux, macOS, Windows, arm64, amd64 architectures out of the box, with optimized builds for Raspberry Pi devices
 - **Support Text Embedding**: Support OpenAI-compatible API integration, support automatic text vectorization
 
 Scintirete targets small to medium-scale projects, edge computing scenarios, and developers who need rapid prototyping with a reliable, high-performance, and maintainable vector search solution.
@@ -36,7 +36,7 @@ Scintirete targets small to medium-scale projects, edge computing scenarios, and
 
 - [ ] Provide upstream framework integrations, such as langchain, langgraph, etc.
 - [ ] Implement some killer features in the webapp for reference experience, such as movie recommendation, face recognition, knowledge base question-answering, etc.
-- [ ] Run the full project smoothly on Raspberry Pi
+- [x] Run the full project smoothly on Raspberry Pi
 - [ ] Provide multi-language SDK based on protobuf
 
 ## Quick Start
@@ -52,6 +52,26 @@ Scintirete targets small to medium-scale projects, edge computing scenarios, and
 
 Download the latest release from the [releases page](https://github.com/scintirete/scintirete/releases).
 
+**Platform Support:**
+
+| Platform | Architecture | Binary Package | Supported Devices |
+|----------|-------------|----------------|-------------------|
+| **Linux (x86_64)** | amd64 | `scintirete-linux-amd64.tar.gz` | Standard servers, PCs |
+| **Linux (ARM64)** | arm64 | `scintirete-linux-arm64-pi45.tar.gz` | Raspberry Pi 3/4/5, Zero 2W (64-bit OS) |
+| **Linux (ARM v7)** | arm | `scintirete-linux-arm-pi23.tar.gz` | Raspberry Pi 2/3/4/5, Zero 2W (32-bit OS) |
+| **Linux (ARM v6)** | arm | `scintirete-linux-arm-pi1.tar.gz` | Raspberry Pi 1, Zero, Zero W |
+| **Windows** | amd64/arm64 | `scintirete-windows-*.zip` | Windows PCs |
+| **macOS** | amd64/arm64 | `scintirete-darwin-*.tar.gz` | Intel Macs, Apple Silicon |
+
+**Raspberry Pi Quick Reference:**
+
+| Raspberry Pi Model | CPU Architecture | Common OS Bit Width | Go Build Parameters | Docker Architecture |
+|-------------------|------------------|-------------------|-------------------|-------------------|
+| Pi 1, Pi Zero, Pi Zero W | ARMv6 (32-bit) | 32-bit | `GOARCH=arm, GOARM=6` | `linux/arm/v6` |
+| Pi 2 (Rev 1.1) | ARMv7 (32-bit) | 32-bit | `GOARCH=arm, GOARM=7` | `linux/arm/v7` |
+| Pi 3, Pi 4, Pi 5, Zero 2 W | ARMv8 (64-bit capable) | 32-bit OS (legacy Raspberry Pi OS) | `GOARCH=arm, GOARM=7` (compatibility mode) | `linux/arm/v7` |
+| Pi 3, Pi 4, Pi 5, Zero 2 W | ARMv8 (AArch64) | 64-bit OS (modern Raspberry Pi OS) | `GOARCH=arm64` | `linux/arm64` |
+
 #### Option 2: Build from Source
 
 ```bash
@@ -62,9 +82,23 @@ make all
 
 #### Option 3: Docker
 
+Docker images support multiple architectures and will automatically select the appropriate architecture:
+
 ```bash
+# Pull latest version (auto-selects architecture)
 docker pull ghcr.io/scintirete/scintirete:latest
+
+# Explicitly specify architecture (if needed)
+docker pull --platform linux/arm64 ghcr.io/scintirete/scintirete:latest    # Pi 3/4/5 (64-bit)
+docker pull --platform linux/arm/v7 ghcr.io/scintirete/scintirete:latest   # Pi 2/3/4/5 (32-bit)
+docker pull --platform linux/arm/v6 ghcr.io/scintirete/scintirete:latest   # Pi 1/Zero/Zero W
 ```
+
+**Supported Docker Architectures:**
+- `linux/amd64` - x86_64 platforms
+- `linux/arm64` - ARM64 platforms (Raspberry Pi 3/4/5, Zero 2W with 64-bit OS)
+- `linux/arm/v7` - ARM v7 platforms (Raspberry Pi 2/3/4/5, Zero 2W with 32-bit OS)
+- `linux/arm/v6` - ARM v6 platforms (Raspberry Pi 1, Zero, Zero W)
 
 ### Basic Usage
 
