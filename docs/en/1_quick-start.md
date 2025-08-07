@@ -59,6 +59,8 @@ cd scintirete-linux-amd64
 ./scintirete-server -c scintirete.toml
 ```
 
+  > Configuration example: [scintirete.toml](https://github.com/Scintirete/Scintirete/blob/refs/heads/main/configs/scintirete.template.toml), the configuration has complete comments, and the important configurations are passwords and embedding fields. The password field is used to set the password, and the embedding field is used to set the vector engine.
+
 ## 📊 Management Interface
 
 Access the Web management interface:

@@ -9,6 +9,7 @@ ManagerUI is the Web management interface for Scintirete, providing an intuitive
 **Demo Access URL**: [http://scintirete-manager-ui.cloud.wj2015.com/](http://scintirete-manager-ui.cloud.wj2015.com/)
 
 > ⚠️ **Security Restrictions**: The online demo version only supports client direct connection mode for security reasons, and does not support server forwarding mode. The local deployment version supports all features.
+
 > ⚠️ **Access Address**: The official access address is undergoing domain ICP registration, please wait patiently.
 
 ### Local Deployment
