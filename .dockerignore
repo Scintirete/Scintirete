@@ -1,0 +1,56 @@
+# Git and version control
+.git
+.gitignore
+
+# Documentation
+README*.md
+docs/
+*.md
+head-logo*.jpg
+logo.png
+
+# Source code (not needed for runtime builds)
+cmd/
+internal/
+pkg/
+test/
+*.go
+go.mod
+go.sum
+Makefile
+
+# Build artifacts from source builds
+bin/
+
+# Development and CI
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Data and logs
+data/
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Monitoring configs (not needed for basic runtime)
+monitoring/
+
+# Schemas (not needed for runtime)
+schemas/
+
+# Generated code (not needed for runtime builds)
+gen/
+
+# Original Dockerfile (we use Dockerfile.runtime)
+Dockerfile
+
+# Keep only essential files for runtime:
+# - docker-build/ (contains pre-compiled binaries)
+# - configs/ (configuration templates)  
+# - Dockerfile.runtime (our runtime dockerfile)

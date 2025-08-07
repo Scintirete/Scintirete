@@ -169,10 +169,79 @@ jobs:
 
   # Docker 镜像构建和推送
   docker:
+    needs: release
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Download release artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: scintirete-linux-*
+        path: ./artifacts
+        merge-multiple: false
+
+    - name: Prepare Docker build context from artifacts
+      run: |
+        # Create docker-build directory
+        mkdir -p docker-build
+        
+        echo "Downloaded artifacts structure:"
+        ls -la ./artifacts/
+        
+        # Map artifacts to Docker platforms and extract binaries
+        declare -A platform_map=(
+          ["scintirete-linux-amd64"]="amd64"
+          ["scintirete-linux-arm64"]="arm64"
+          ["scintirete-linux-arm-arm7"]="arm-v7"
+          ["scintirete-linux-arm-arm6"]="arm-v6"
+        )
+        
+        for artifact_name in "${!platform_map[@]}"; do
+          docker_platform="${platform_map[$artifact_name]}"
+          artifact_path="./artifacts/$artifact_name"
+          
+          echo "Processing $artifact_name -> $docker_platform"
+          
+          if [ ! -d "$artifact_path" ]; then
+            echo "Warning: Artifact directory $artifact_path not found"
+            continue
+          fi
+          
+          # Find the archive in the artifact directory
+          archive=$(find "$artifact_path" -name "*.tar.gz" | head -1)
+          if [ -z "$archive" ]; then
+            echo "Warning: No tar.gz found in $artifact_path"
+            ls -la "$artifact_path"
+            continue
+          fi
+          
+          echo "Extracting $archive"
+          
+          # Extract directly to docker-build with specific naming
+          tar -xzf "$archive" -C docker-build
+          
+          # Rename binaries to match Docker platform expectations
+          mv docker-build/scintirete-server-* docker-build/scintirete-server-linux-${docker_platform} 2>/dev/null || true
+          mv docker-build/scintirete-cli-* docker-build/scintirete-cli-linux-${docker_platform} 2>/dev/null || true
+        done
+        
+        echo "Final binary inventory:"
+        ls -la docker-build/
+        
+        # Verify all required binaries exist
+        for platform in "amd64" "arm64" "arm-v7" "arm-v6"; do
+          if [ ! -f "docker-build/scintirete-server-linux-${platform}" ]; then
+            echo "ERROR: Missing scintirete-server-linux-${platform}"
+            exit 1
+          fi
+          if [ ! -f "docker-build/scintirete-cli-linux-${platform}" ]; then
+            echo "ERROR: Missing scintirete-cli-linux-${platform}"
+            exit 1
+          fi
+          echo "✓ Binaries for ${platform} are ready"
+        done
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -196,10 +265,11 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
+    - name: Build and push multi-architecture Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
+        file: ./Dockerfile.runtime
         platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
         push: true
         tags: ${{ steps.meta.outputs.tags }}
