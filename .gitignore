@@ -51,3 +51,6 @@ internal/flatbuffers/aof/*.go
 !internal/flatbuffers/aof/.gitkeep
 
 .DS_Store
+
+# SDK directories (maintained in separate repositories)
+/sdk/
