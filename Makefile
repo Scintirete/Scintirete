@@ -106,6 +106,7 @@ build: proto-gen flatbuffers-gen ## 构建所有二进制文件
 	@mkdir -p $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/$(SERVER_BINARY) ./cmd/scintirete-server
 	$(GO) build -o $(BIN_DIR)/$(CLI_BINARY) ./cmd/scintirete-cli
+	$(GO) build -o $(BIN_DIR)/cpu-monitor ./cmd/cpu-monitor
 
 server: proto-gen flatbuffers-gen ## 只构建服务端
 	@echo "Building server..."
@@ -116,6 +117,11 @@ cli: proto-gen flatbuffers-gen ## 只构建客户端
 	@echo "Building CLI..."
 	@mkdir -p $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/$(CLI_BINARY) ./cmd/scintirete-cli
+
+cpu-monitor: proto-gen flatbuffers-gen ## 构建CPU监控工具
+	@echo "Building CPU monitor..."
+	@mkdir -p $(BIN_DIR)
+	$(GO) build -o $(BIN_DIR)/cpu-monitor ./cmd/cpu-monitor
 
 test: proto-gen flatbuffers-gen ## 运行测试
 	@echo "Running tests..."

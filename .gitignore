@@ -33,8 +33,7 @@ go.work.sum
 
 # scintirete-server
 # scintirete-cli
-bin/scintirete-cli
-bin/scintirete-server
+bin/
 data/
 
 # Configuration files (use template instead)

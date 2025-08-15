@@ -750,7 +750,10 @@ func (a *AOFLogger) startBackgroundSync() {
 			select {
 			case <-a.syncTicker.C:
 				a.mu.Lock()
-				a.syncToFile() // Ignore errors in background sync
+				// Only sync if there's buffered data to avoid unnecessary disk I/O
+				if a.writer.Buffered() > 0 {
+					a.syncToFile() // Ignore errors in background sync
+				}
 				a.mu.Unlock()
 			case <-a.stopSync:
 				return
