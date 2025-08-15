@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"time"
-	
+
 	"github.com/scintirete/scintirete/internal/core"
 )
 
@@ -21,14 +21,14 @@ type CPUMonitor struct {
 
 // CPUStats contains CPU usage statistics
 type CPUStats struct {
-	Timestamp           time.Time
-	CPUUsage            float64
-	GoroutineCount      int
-	GCTime             time.Duration
-	GCCycles           uint32
-	MemoryAlloc        uint64
-	MemorySys          uint64
-	NumGC              uint32
+	Timestamp      time.Time
+	CPUUsage       float64
+	GoroutineCount int
+	GCTime         time.Duration
+	GCCycles       uint32
+	MemoryAlloc    uint64
+	MemorySys      uint64
+	NumGC          uint32
 }
 
 // NewCPUMonitor creates a new CPU monitor
@@ -49,7 +49,7 @@ func (m *CPUMonitor) Start(ctx context.Context) error {
 
 	m.logger.Info(ctx, "CPU monitoring started", map[string]interface{}{
 		"interval_seconds": m.interval.Seconds(),
-		"threshold":       m.threshold,
+		"threshold":        m.threshold,
 	})
 
 	// Start monitoring goroutine
@@ -73,11 +73,11 @@ func (m *CPUMonitor) monitor(ctx context.Context) {
 		case <-ticker.C:
 			stats := m.collectStats()
 			m.logStats(stats)
-			
+
 			if stats.CPUUsage > m.threshold {
 				m.warnHighCPU(stats)
 			}
-			
+
 		case <-m.stopChan:
 			m.logger.Info(ctx, "CPU monitoring stopped", nil)
 			return
@@ -92,21 +92,21 @@ func (m *CPUMonitor) monitor(ctx context.Context) {
 func (m *CPUMonitor) collectStats() CPUStats {
 	now := time.Now()
 	currentStats := getCPUStats()
-	
+
 	// Calculate CPU usage since last check
 	var cpuUsage float64
 	if !m.lastCPUTime.IsZero() && len(m.lastCPUStats) == len(currentStats) {
 		cpuUsage = calculateCPUUsage(m.lastCPUStats, currentStats, m.lastCPUTime, now)
 	}
-	
+
 	// Get memory stats
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
-	
+
 	// Get GC stats
 	gcStats := &runtime.MemStats{}
 	runtime.ReadMemStats(gcStats)
-	
+
 	stats := CPUStats{
 		Timestamp:      now,
 		CPUUsage:       cpuUsage,
@@ -117,11 +117,11 @@ func (m *CPUMonitor) collectStats() CPUStats {
 		MemorySys:      memStats.Sys,
 		NumGC:          gcStats.NumGC,
 	}
-	
+
 	// Update last stats
 	m.lastCPUTime = now
 	m.lastCPUStats = currentStats
-	
+
 	return stats
 }
 
@@ -155,7 +155,7 @@ func (m *CPUMonitor) warnHighCPU(stats CPUStats) {
 func getCPUStats() []time.Duration {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
-	
+
 	// Get CPU time from runtime
 	return []time.Duration{
 		time.Duration(stats.Sys), // System CPU time
@@ -167,34 +167,34 @@ func calculateCPUUsage(prevStats, currStats []time.Duration, prevTime, currTime 
 	if len(prevStats) != len(currStats) {
 		return 0.0
 	}
-	
+
 	elapsed := currTime.Sub(prevTime)
 	if elapsed <= 0 {
 		return 0.0
 	}
-	
+
 	// Calculate total CPU time used
 	var totalCPU time.Duration
 	for i := 0; i < len(prevStats) && i < len(currStats); i++ {
 		totalCPU += currStats[i] - prevStats[i]
 	}
-	
+
 	// Calculate CPU usage percentage
 	cpuUsage := float64(totalCPU) / float64(elapsed)
-	
+
 	// Normalize by number of CPUs
 	numCPU := runtime.NumCPU()
 	if numCPU > 0 {
 		cpuUsage /= float64(numCPU)
 	}
-	
+
 	// Ensure the value is between 0 and 1
 	if cpuUsage < 0 {
 		cpuUsage = 0
 	} else if cpuUsage > 1 {
 		cpuUsage = 1
 	}
-	
+
 	return cpuUsage
 }
 

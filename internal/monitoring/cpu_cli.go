@@ -80,7 +80,7 @@ func MonitorServerCPU(ctx context.Context, duration time.Duration) error {
 	}
 
 	fmt.Printf("🔍 Monitoring CPU usage for %v...\n", duration)
-	
+
 	// Create context with timeout
 	monitorCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()

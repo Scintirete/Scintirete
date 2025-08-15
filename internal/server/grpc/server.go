@@ -11,11 +11,11 @@ import (
 	"github.com/scintirete/scintirete/internal/core"
 	"github.com/scintirete/scintirete/internal/core/database"
 	"github.com/scintirete/scintirete/internal/embedding"
+	"github.com/scintirete/scintirete/internal/monitoring"
 	"github.com/scintirete/scintirete/internal/observability/audit"
 	"github.com/scintirete/scintirete/internal/observability/logger"
 	"github.com/scintirete/scintirete/internal/persistence"
 	"github.com/scintirete/scintirete/internal/server"
-	"github.com/scintirete/scintirete/internal/monitoring"
 )
 
 // Server implements the ScintireteService gRPC interface
@@ -122,8 +122,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info(ctx, "Server started successfully", map[string]interface{}{
 		"cpu_monitoring_enabled": true,
-		"monitoring_interval":   "10s",
-		"cpu_threshold":         "80%",
+		"monitoring_interval":    "10s",
+		"cpu_threshold":          "80%",
 	})
 
 	return nil

@@ -15,7 +15,7 @@ func main() {
 	duration := flag.Duration("duration", 30*time.Second, "Monitoring duration")
 	threshold := flag.Float64("threshold", 0.7, "CPU usage threshold (0.0-1.0)")
 	interval := flag.Duration("interval", 5*time.Second, "Monitoring interval")
-	
+
 	flag.Parse()
 
 	// Validate threshold
