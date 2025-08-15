@@ -12,7 +12,7 @@ services:
     volumes:
       - ./data:/app/data
       # Mount your scintirete.toml config file (copy from scintirete.template.toml)
-      - ./configs/scintirete.toml:/app/configs/scintirete.toml:ro
+      - ./configs/:/app/configs/:ro
     networks:
       - scintirete-network
     healthcheck:

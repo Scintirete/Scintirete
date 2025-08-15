@@ -4,12 +4,11 @@ ManagerUI 是 Scintirete 的 Web 管理界面，提供直观的可视化操作�
 
 ## 🌐 访问入口
 
-### 在线体验版
+### 在线版
 
-**临时云端访问地址**: [http://scintirete-manager-ui.cloud.wj2015.com/](http://scintirete-manager-ui.cloud.wj2015.com/)
+**访问地址**: [https://dms.scintirete.top/](https://dms.scintirete.top/)
 
-> ⚠️ **安全限制**: 在线体验版出于安全考虑，仅支持客户端直连模式，不支持服务器转发模式。本地部署版本支持全部功能。
-> ⚠️ **访问地址**: 正式访问地址正在进行域名备案，请耐心等待。
+> ⚠️ **安全限制**: 在线版出于安全考虑，仅支持客户端直连模式，不支持服务器转发模式。本地部署版本支持全部功能。
 
 ### 本地部署
 

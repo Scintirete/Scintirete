@@ -11,6 +11,7 @@ import (
 	"github.com/scintirete/scintirete/internal/core"
 	"github.com/scintirete/scintirete/internal/core/database"
 	"github.com/scintirete/scintirete/internal/embedding"
+	"github.com/scintirete/scintirete/internal/monitoring"
 	"github.com/scintirete/scintirete/internal/observability/audit"
 	"github.com/scintirete/scintirete/internal/observability/logger"
 	"github.com/scintirete/scintirete/internal/persistence"
@@ -29,6 +30,7 @@ type Server struct {
 	logger      core.Logger
 	auditLogger *audit.Logger
 	auth        server.Authenticator
+	cpuMonitor  *monitoring.CPUMonitor
 
 	// Statistics
 	startTime    time.Time
@@ -84,6 +86,9 @@ func NewServer(config server.ServerConfig) (*Server, error) {
 		auditLogger, _ = audit.NewLogger(audit.Config{Enabled: false})
 	}
 
+	// Create CPU monitor for performance monitoring
+	cpuMonitor := monitoring.NewCPUMonitor(serverLogger, 10*time.Second, 0.8)
+
 	return &Server{
 		engine:      engine,
 		persistence: persistenceManager,
@@ -92,12 +97,19 @@ func NewServer(config server.ServerConfig) (*Server, error) {
 		logger:      serverLogger,
 		auditLogger: auditLogger,
 		auth:        auth,
+		cpuMonitor:  cpuMonitor,
 		startTime:   time.Now(),
 	}, nil
 }
 
 // Start starts the server and recovery process
 func (s *Server) Start(ctx context.Context) error {
+	// Start CPU monitoring
+	if err := s.cpuMonitor.Start(ctx); err != nil {
+		s.logger.Error(ctx, "Failed to start CPU monitoring", err, nil)
+		// Don't fail server startup for CPU monitoring issues
+	}
+
 	// Start persistence manager background tasks
 	if err := s.persistence.StartBackgroundTasks(ctx); err != nil {
 		return fmt.Errorf("failed to start persistence background tasks: %w", err)
@@ -108,11 +120,20 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to recover from persistent data: %w", err)
 	}
 
+	s.logger.Info(ctx, "Server started successfully", map[string]interface{}{
+		"cpu_monitoring_enabled": true,
+		"monitoring_interval":    "10s",
+		"cpu_threshold":          "80%",
+	})
+
 	return nil
 }
 
 // Stop gracefully stops the server
 func (s *Server) Stop(ctx context.Context) error {
+	// Stop CPU monitoring
+	s.cpuMonitor.Stop()
+
 	// Stop persistence manager
 	if err := s.persistence.Stop(ctx); err != nil {
 		return fmt.Errorf("failed to stop persistence manager: %w", err)

@@ -33,8 +33,7 @@ go.work.sum
 
 # scintirete-server
 # scintirete-cli
-bin/scintirete-cli
-bin/scintirete-server
+bin/
 data/
 
 # Configuration files (use template instead)
@@ -51,3 +50,6 @@ internal/flatbuffers/aof/*.go
 !internal/flatbuffers/aof/.gitkeep
 
 .DS_Store
+
+# SDK directories (maintained in separate repositories)
+/sdk/

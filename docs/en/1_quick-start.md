@@ -59,11 +59,13 @@ cd scintirete-linux-amd64
 ./scintirete-server -c scintirete.toml
 ```
 
+  > Configuration example: [scintirete.toml](https://github.com/Scintirete/Scintirete/blob/refs/heads/main/configs/scintirete.template.toml), the configuration has complete comments, and the important configurations are passwords and embedding fields. The password field is used to set the password, and the embedding field is used to set the vector engine.
+
 ## 📊 Management Interface
 
 Access the Web management interface:
 
-**Cloud Address**: [http://scintirete-manager-ui.cloud.wj2015.com/](http://scintirete-manager-ui.cloud.wj2015.com/)
+**Cloud Address**: [https://dms.scintirete.top/](https://dms.scintirete.top/)
 
 > Note: The client direct connection mode can be used for Scintirete services that the local network can connect to. The server forwarding mode is suitable for production intranet environments. For security reasons, the cloud address does not support server forwarding mode.
 
