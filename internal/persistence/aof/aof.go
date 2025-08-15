@@ -25,7 +25,7 @@ type SyncStrategy string
 const (
 	SyncAlways   SyncStrategy = "always"   // Sync after every write
 	SyncEverySec SyncStrategy = "everysec" // Sync every second
-	SyncNo       SyncStrategy = "no"       // Let OS decide when to sync
+	SyncNo       SyncStrategy = "no"       // Smart sync: sync when buffer ≥4KB or every 1 minute
 )
 
 // AOFStats contains statistics about the AOF log
@@ -49,6 +49,12 @@ type AOFLogger struct {
 	stopSync   chan struct{}
 	syncWG     sync.WaitGroup
 
+	// Smart sync for SyncNo strategy (buffer size or timeout based)
+	smartSyncTicker *time.Ticker
+	smartSyncWG     sync.WaitGroup
+	bufferThreshold int           // Buffer size threshold in bytes (default 4KB)
+	timeThreshold   time.Duration // Time threshold (default 1 minute)
+
 	// Statistics
 	commandCount int64
 	lastSync     time.Time
@@ -69,17 +75,22 @@ func NewAOFLogger(filePath string, syncStrategy SyncStrategy) (*AOFLogger, error
 	}
 
 	logger := &AOFLogger{
-		file:         file,
-		writer:       bufio.NewWriter(file),
-		filePath:     filePath,
-		syncStrategy: syncStrategy,
-		stopSync:     make(chan struct{}),
-		lastSync:     time.Now(),
+		file:            file,
+		writer:          bufio.NewWriter(file),
+		filePath:        filePath,
+		syncStrategy:    syncStrategy,
+		stopSync:        make(chan struct{}),
+		lastSync:        time.Now(),
+		bufferThreshold: 6 * 1024,        // 6KB buffer threshold
+		timeThreshold:   5 * time.Minute, // 5 minute time threshold
 	}
 
 	// Start background sync if needed
-	if syncStrategy == SyncEverySec {
+	switch syncStrategy {
+	case SyncEverySec:
 		logger.startBackgroundSync()
+	case SyncNo:
+		logger.startSmartSync()
 	}
 
 	return logger, nil
@@ -123,7 +134,12 @@ func (a *AOFLogger) WriteCommand(ctx context.Context, command types.AOFCommand) 
 	case SyncEverySec:
 		// Background sync handles this
 	case SyncNo:
-		// OS will sync when it wants
+		// Smart sync handles this - check if we need immediate sync due to buffer size
+		if a.writer.Buffered() >= a.bufferThreshold {
+			if err := a.syncToFile(); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -693,6 +709,12 @@ func (a *AOFLogger) Close() error {
 		a.syncWG.Wait()
 	}
 
+	// Stop smart sync
+	if a.smartSyncTicker != nil {
+		a.smartSyncTicker.Stop()
+		a.smartSyncWG.Wait()
+	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -750,8 +772,39 @@ func (a *AOFLogger) startBackgroundSync() {
 			select {
 			case <-a.syncTicker.C:
 				a.mu.Lock()
-				// Only sync if there's buffered data to avoid unnecessary disk I/O
-				if a.writer.Buffered() > 0 {
+				// 智能同步：只在有缓冲数据才同步
+				bufferedBytes := a.writer.Buffered()
+
+				if bufferedBytes > 0 {
+					a.syncToFile() // Ignore errors in background sync
+				}
+				a.mu.Unlock()
+			case <-a.stopSync:
+				return
+			}
+		}
+	}()
+}
+
+// startSmartSync starts the smart sync goroutine for SyncNo strategy
+// It syncs based on time threshold (1 minute) to ensure data is not lost
+func (a *AOFLogger) startSmartSync() {
+	a.smartSyncTicker = time.NewTicker(a.timeThreshold)
+	a.smartSyncWG.Add(1)
+
+	go func() {
+		defer a.smartSyncWG.Done()
+		defer a.smartSyncTicker.Stop()
+
+		for {
+			select {
+			case <-a.smartSyncTicker.C:
+				a.mu.Lock()
+				// 基于时间的智能同步：只在有缓冲数据且距离上次同步超过阈值时才同步
+				bufferedBytes := a.writer.Buffered()
+				timeSinceLastSync := time.Since(a.lastSync)
+
+				if bufferedBytes > 0 && timeSinceLastSync >= a.timeThreshold {
 					a.syncToFile() // Ignore errors in background sync
 				}
 				a.mu.Unlock()

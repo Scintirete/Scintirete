@@ -107,7 +107,7 @@ func DefaultConfig() *Config {
 			RDBFilename:        "dump.rdb",
 			AOFFilename:        "appendonly.aof",
 			AOFSyncStrategy:    "everysec",
-			RDBIntervalMinutes: 5,  // 5 minutes, consistent with persistence.DefaultConfig
+			RDBIntervalMinutes: 0,  // 0 minutes, consistent with persistence.DefaultConfig
 			AOFRewriteSizeMB:   64, // 64MB, consistent with persistence.DefaultConfig
 		},
 		Embedding: EmbeddingConfig{
