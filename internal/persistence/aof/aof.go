@@ -750,8 +750,16 @@ func (a *AOFLogger) startBackgroundSync() {
 			select {
 			case <-a.syncTicker.C:
 				a.mu.Lock()
-				// Only sync if there's buffered data to avoid unnecessary disk I/O
-				if a.writer.Buffered() > 0 {
+				// 智能同步：只在有缓冲数据且距离上次同步超过1秒时才同步
+				bufferedBytes := a.writer.Buffered()
+				timeSinceLastSync := time.Since(a.lastSync)
+
+				// 只有在以下情况才进行同步：
+				// 1. 有缓冲的数据
+				// 2. 距离上次同步已经超过5秒
+				// 3. 缓冲数据超过4KB（避免频繁同步小量数据）
+				if bufferedBytes > 0 && timeSinceLastSync >= time.Second &&
+					(bufferedBytes >= 4096 || timeSinceLastSync >= 5*time.Second) {
 					a.syncToFile() // Ignore errors in background sync
 				}
 				a.mu.Unlock()

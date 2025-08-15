@@ -125,18 +125,21 @@ func (m *CPUMonitor) collectStats() CPUStats {
 	return stats
 }
 
-// logStats logs the current statistics
+// logStats logs the current statistics (优化：只在必要时记录详细日志)
 func (m *CPUMonitor) logStats(stats CPUStats) {
-	m.logger.Debug(context.Background(), "CPU usage statistics", map[string]interface{}{
-		"timestamp":       stats.Timestamp.Format(time.RFC3339),
-		"cpu_usage":       fmt.Sprintf("%.2f%%", stats.CPUUsage*100),
-		"goroutines":      stats.GoroutineCount,
-		"gc_time_ms":      stats.GCTime / 1e6,
-		"gc_cycles":       stats.GCCycles,
-		"memory_alloc_mb": stats.MemoryAlloc / 1024 / 1024,
-		"memory_sys_mb":   stats.MemorySys / 1024 / 1024,
-		"num_gc":          stats.NumGC,
-	})
+	// 只在CPU使用率较高或有异常情况时才记录详细日志
+	if stats.CPUUsage > 0.5 || stats.GoroutineCount > 1000 || stats.MemoryAlloc > 100*1024*1024 {
+		m.logger.Debug(context.Background(), "CPU usage statistics", map[string]interface{}{
+			"timestamp":       stats.Timestamp.Format(time.RFC3339),
+			"cpu_usage":       fmt.Sprintf("%.2f%%", stats.CPUUsage*100),
+			"goroutines":      stats.GoroutineCount,
+			"gc_time_ms":      stats.GCTime / 1e6,
+			"gc_cycles":       stats.GCCycles,
+			"memory_alloc_mb": stats.MemoryAlloc / 1024 / 1024,
+			"memory_sys_mb":   stats.MemorySys / 1024 / 1024,
+			"num_gc":          stats.NumGC,
+		})
+	}
 }
 
 // warnHighCPU logs a warning when CPU usage exceeds threshold

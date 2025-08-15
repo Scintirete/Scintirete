@@ -34,6 +34,12 @@ type Manager struct {
 
 	// Statistics
 	stats Stats
+
+	// 智能状态跟踪，避免不必要的磁盘I/O
+	lastAOFCommandTime  time.Time // 上次AOF命令写入时间
+	aofCommandsSinceRDB int64     // 自上次RDB快照以来的AOF命令数
+	lastRDBTime         time.Time // 上次RDB快照时间
+	isDirty             bool      // 数据是否有变化
 }
 
 // Config contains persistence configuration
@@ -116,6 +122,11 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 		config:     config,
 		stopTasks:  make(chan struct{}),
 		logger:     persistenceLogger,
+		// 初始化智能状态跟踪
+		lastAOFCommandTime:  time.Time{},
+		aofCommandsSinceRDB: 0,
+		lastRDBTime:         time.Now(),
+		isDirty:             false,
 	}
 
 	// Set up command applier if database engine is provided
@@ -128,6 +139,13 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 
 // WriteAOF writes a command to the append-only file
 func (m *Manager) WriteAOF(ctx context.Context, command types.AOFCommand) error {
+	m.mu.Lock()
+	// 更新状态跟踪
+	m.lastAOFCommandTime = time.Now()
+	m.aofCommandsSinceRDB++
+	m.isDirty = true
+	m.mu.Unlock()
+
 	return m.aofLogger.WriteCommand(ctx, command)
 }
 
@@ -461,8 +479,14 @@ func (m *Manager) runRDBSnapshotTask(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			// Get current database state and create snapshot if command applier is available
-			if m.cmdApplier != nil {
+			// 智能快照：只在满足以下条件时才创建RDB快照
+			m.mu.RLock()
+			shouldCreateSnapshot := m.cmdApplier != nil && m.isDirty &&
+				(m.aofCommandsSinceRDB >= 100 || // 至少有100个命令
+					time.Since(m.lastRDBTime) >= 30*time.Minute) // 或者距离上次快照超过30分钟
+			m.mu.RUnlock()
+
+			if shouldCreateSnapshot {
 				databases, err := m.cmdApplier.GetDatabaseState(ctx)
 				if err != nil {
 					// Log error but continue running
@@ -473,6 +497,17 @@ func (m *Manager) runRDBSnapshotTask(ctx context.Context) {
 				if err := m.SaveSnapshot(ctx, databases); err != nil {
 					// Log error but continue running
 					m.logger.Error(ctx, "failed to save RDB snapshot", err, nil)
+				} else {
+					// 更新状态：快照成功后重置计数器
+					m.mu.Lock()
+					m.aofCommandsSinceRDB = 0
+					m.lastRDBTime = time.Now()
+					m.isDirty = false
+					m.mu.Unlock()
+
+					m.logger.Info(ctx, "智能RDB快照创建成功", map[string]interface{}{
+						"reason": "数据变化达到阈值",
+					})
 				}
 			}
 
@@ -488,27 +523,56 @@ func (m *Manager) runRDBSnapshotTask(ctx context.Context) {
 func (m *Manager) runAOFRewriteTask(ctx context.Context) {
 	defer m.taskWG.Done()
 
-	ticker := time.NewTicker(time.Minute) // Check every minute
+	// 降低检查频率到5分钟，减少不必要的系统调用
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
+
+	var lastKnownFileSize int64
 
 	for {
 		select {
 		case <-ticker.C:
-			stats := m.aofLogger.GetStats()
-			if stats.FileSize > m.config.AOFRewriteSize {
-				// Get optimized commands and rewrite AOF if command applier is available
-				if m.cmdApplier != nil {
-					commands, err := m.cmdApplier.GetOptimizedCommands(ctx)
-					if err != nil {
-						// Log error but continue running
-						m.logger.Error(ctx, "failed to get optimized commands for AOF rewrite", err, nil)
-						continue
-					}
+			// 智能AOF重写：只在必要时才检查文件大小和执行重写
+			m.mu.RLock()
+			shouldCheckRewrite := m.isDirty && m.aofCommandsSinceRDB >= 50 // 至少有50个命令变化
+			m.mu.RUnlock()
 
-					if err := m.RewriteAOF(ctx, commands); err != nil {
-						// Log error but continue running
-						m.logger.Error(ctx, "failed to rewrite AOF", err, nil)
-					}
+			if !shouldCheckRewrite {
+				continue // 没有足够的变化，跳过此次检查
+			}
+
+			// 获取AOF统计信息（这个操作相对轻量，主要是内存操作）
+			stats := m.aofLogger.GetStats()
+			currentFileSize := stats.FileSize
+
+			// 智能判断：只有在以下情况才进行重写
+			// 1. 文件大小超过配置阈值
+			// 2. 文件大小比上次检查增长了至少50%（避免频繁重写）
+			shouldRewrite := currentFileSize > m.config.AOFRewriteSize &&
+				(lastKnownFileSize == 0 || currentFileSize > lastKnownFileSize*3/2)
+
+			if shouldRewrite && m.cmdApplier != nil {
+				m.logger.Info(ctx, "开始智能AOF重写", map[string]interface{}{
+					"current_size_mb":    currentFileSize / 1024 / 1024,
+					"threshold_mb":       m.config.AOFRewriteSize / 1024 / 1024,
+					"commands_since_rdb": m.aofCommandsSinceRDB,
+				})
+
+				commands, err := m.cmdApplier.GetOptimizedCommands(ctx)
+				if err != nil {
+					// Log error but continue running
+					m.logger.Error(ctx, "failed to get optimized commands for AOF rewrite", err, nil)
+					continue
+				}
+
+				if err := m.RewriteAOF(ctx, commands); err != nil {
+					// Log error but continue running
+					m.logger.Error(ctx, "failed to rewrite AOF", err, nil)
+				} else {
+					lastKnownFileSize = currentFileSize
+					m.logger.Info(ctx, "智能AOF重写完成", map[string]interface{}{
+						"optimized_commands": len(commands),
+					})
 				}
 			}
 

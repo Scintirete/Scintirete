@@ -86,8 +86,8 @@ func NewServer(config server.ServerConfig) (*Server, error) {
 		auditLogger, _ = audit.NewLogger(audit.Config{Enabled: false})
 	}
 
-	// Create CPU monitor for performance monitoring
-	cpuMonitor := monitoring.NewCPUMonitor(serverLogger, 10*time.Second, 0.8)
+	// Create CPU monitor for performance monitoring (优化：降低监控频率减少系统开销)
+	cpuMonitor := monitoring.NewCPUMonitor(serverLogger, 30*time.Second, 0.8)
 
 	return &Server{
 		engine:      engine,
@@ -122,7 +122,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info(ctx, "Server started successfully", map[string]interface{}{
 		"cpu_monitoring_enabled": true,
-		"monitoring_interval":    "10s",
+		"monitoring_interval":    "30s", // 更新为30秒
 		"cpu_threshold":          "80%",
 	})
 
