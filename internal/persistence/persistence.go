@@ -482,7 +482,7 @@ func (m *Manager) runRDBSnapshotTask(ctx context.Context) {
 			// 智能快照：只在满足以下条件时才创建RDB快照
 			m.mu.RLock()
 			shouldCreateSnapshot := m.cmdApplier != nil && m.isDirty &&
-				(m.aofCommandsSinceRDB >= 100 || // 至少有100个命令
+				(m.aofCommandsSinceRDB >= 200 || // 至少有200个命令
 					time.Since(m.lastRDBTime) >= 30*time.Minute) // 或者距离上次快照超过30分钟
 			m.mu.RUnlock()
 
@@ -534,7 +534,7 @@ func (m *Manager) runAOFRewriteTask(ctx context.Context) {
 		case <-ticker.C:
 			// 智能AOF重写：只在必要时才检查文件大小和执行重写
 			m.mu.RLock()
-			shouldCheckRewrite := m.isDirty && m.aofCommandsSinceRDB >= 50 // 至少有50个命令变化
+			shouldCheckRewrite := m.isDirty && m.aofCommandsSinceRDB >= 200 // 至少有200个命令变化
 			m.mu.RUnlock()
 
 			if !shouldCheckRewrite {
