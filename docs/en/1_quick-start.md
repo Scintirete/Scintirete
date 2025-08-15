@@ -65,7 +65,7 @@ cd scintirete-linux-amd64
 
 Access the Web management interface:
 
-**Cloud Address**: [http://scintirete-manager-ui.cloud.wj2015.com/](http://scintirete-manager-ui.cloud.wj2015.com/)
+**Cloud Address**: [https://dms.scintirete.top/](https://dms.scintirete.top/)
 
 > Note: The client direct connection mode can be used for Scintirete services that the local network can connect to. The server forwarding mode is suitable for production intranet environments. For security reasons, the cloud address does not support server forwarding mode.
 

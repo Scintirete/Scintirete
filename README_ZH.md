@@ -14,11 +14,9 @@ Scintirete 是一款基于 HNSW（分层导航小世界）算法实现的轻量�
 
 ## 开源生态
 
-【临时】官网和文档：[scintirete.cloud.wj2015.com](http://scintirete.cloud.wj2015.com/zh/)（[开源地址](https://github.com/Scintirete/webapp)）
+官网和文档：[scintirete.top](https://scintirete.top/zh/)（[开源地址](https://github.com/Scintirete/webapp)）
 
-【临时】数据库管理系统（DBMS）：[scintirete-manager-ui.cloud.wj2015.com](http://scintirete-manager-ui.cloud.wj2015.com/)（[开源地址](https://github.com/Scintirete/scintirete-manager-ui)）
-
-正式官网备案中，暂时无法访问：[scintirete.top](https://scintirete.top)
+数据库管理系统（DBMS）：[dms.scintirete.top](https://dms.scintirete.top/)（[开源地址](https://github.com/Scintirete/scintirete-manager-ui)）
 
 ## 特性
 
@@ -194,7 +192,7 @@ tpm_limit = 90000
   --top-k 3
 ```
 
-更多文档请参阅 [http://scintirete.cloud.wj2015.com/zh/docs](http://scintirete.cloud.wj2015.com/zh/docs) 目录。
+更多文档请参阅 [https://scintirete.top/zh/docs](https://scintirete.top/zh/docs) 目录。
 
 ## 架构
 
@@ -206,7 +204,7 @@ Scintirete 实现了现代向量数据库架构，包含以下组件：
 - **嵌入集成**: OpenAI 兼容 API 集成，支持自动文本向量化
 - **可观测性**: 全面的日志记录、审计日志、指标监控
 
-详细的技术文档请参阅 [http://scintirete.cloud.wj2015.com/zh/docs](http://scintirete.cloud.wj2015.com/zh/docs) 目录。
+详细的技术文档请参阅 [https://scintirete.top/zh/docs](https://scintirete.top/zh/docs) 目录。
 
 ## 配置
 
@@ -243,7 +241,7 @@ Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
 - **gRPC**: 高性能接口，定义在 [protobuf](schemas/proto/scintirete/v1/scintirete.proto) 中
 - **HTTP/JSON**: RESTful 接口，可通过 `http://localhost:8080/` 访问
 
-全面的 API 文档和使用示例请参考 [文档](http://scintirete.cloud.wj2015.com/zh/docs)。
+全面的 API 文档和使用示例请参考 [文档](https://scintirete.top/zh/docs)。
 
 ## 性能考虑
 
@@ -300,7 +298,7 @@ Scintirete 提供 gRPC 和 HTTP/JSON 两种 API：
 
 ## 支持
 
-- **文档**: [文档](http://scintirete.cloud.wj2015.com/zh/docs)
+- **文档**: [文档](https://scintirete.top/zh/docs)
 - **问题**: [GitHub Issues](https://github.com/scintirete/scintirete/issues)
 - **讨论**: [GitHub Discussions](https://github.com/scintirete/scintirete/discussions)
 
