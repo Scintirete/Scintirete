@@ -8,8 +8,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof" // 启用 pprof 端点
 	"os"
 	"os/signal"
+	"runtime/trace"
 	"syscall"
 	"time"
 
@@ -25,9 +27,12 @@ import (
 )
 
 var (
-	configFile = flag.String("config", "configs/scintirete.toml", "Path to configuration file")
-	logLevel   = flag.String("log-level", "", "Log level (debug, info, warn, error)")
-	help       = flag.Bool("help", false, "Show help message")
+	configFile   = flag.String("config", "configs/scintirete.toml", "Path to configuration file")
+	logLevel     = flag.String("log-level", "", "Log level (debug, info, warn, error)")
+	pprofEnabled = flag.Bool("pprof", false, "Enable pprof profiling server")
+	pprofPort    = flag.Int("pprof-port", 6060, "Port for pprof server")
+	traceFile    = flag.String("trace", "", "Enable tracing and write to file")
+	help         = flag.Bool("help", false, "Show help message")
 )
 
 func main() {
@@ -50,6 +55,35 @@ func main() {
 	// Override log level from command line
 	if *logLevel != "" {
 		cfg.Log.Level = *logLevel
+	}
+
+	// Setup tracing if requested
+	var traceFileHandle *os.File
+	if *traceFile != "" {
+		var err error
+		traceFileHandle, err = os.Create(*traceFile)
+		if err != nil {
+			log.Fatalf("Failed to create trace file: %v", err)
+		}
+		defer traceFileHandle.Close()
+
+		if err := trace.Start(traceFileHandle); err != nil {
+			log.Fatalf("Failed to start tracing: %v", err)
+		}
+		defer trace.Stop()
+		log.Printf("Tracing enabled, writing to: %s", *traceFile)
+	}
+
+	// Start pprof server if enabled
+	if *pprofEnabled {
+		go func() {
+			pprofAddr := fmt.Sprintf(":%d", *pprofPort)
+			log.Printf("Starting pprof server on %s", pprofAddr)
+			log.Printf("Access pprof at: http://localhost%s/debug/pprof/", pprofAddr)
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				log.Printf("pprof server error: %v", err)
+			}
+		}()
 	}
 
 	// Note: Configuration validation can be added here if needed
