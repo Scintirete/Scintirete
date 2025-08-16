@@ -129,10 +129,17 @@ func TestVectorCountAfterDeleteAndRestore(t *testing.T) {
 	for dbName, dbState := range databaseStates {
 		collections := make(map[string]rdb.CollectionSnapshot)
 		for collName, collState := range dbState.Collections {
+			// Convert HNSW graph state if present
+			var hnswGraphSnapshot *rdb.HNSWGraphSnapshot
+			if collState.HNSWGraph != nil {
+				hnswGraphSnapshot = rdb.ConvertHNSWGraphState(collState.HNSWGraph)
+			}
+
 			collections[collName] = rdb.CollectionSnapshot{
 				Name:         collState.Name,
 				Config:       collState.Config,
 				Vectors:      collState.Vectors,
+				HNSWGraph:    hnswGraphSnapshot,
 				VectorCount:  collState.VectorCount,
 				DeletedCount: collState.DeletedCount,
 				CreatedAt:    collState.CreatedAt,

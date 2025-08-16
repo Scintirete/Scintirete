@@ -24,7 +24,7 @@ level = "info"
 # 日志格式: "text" (人类可读) 或 "json" (机器可读)
 format = "json"
 # 是否启用审计日志 (记录所有写操作)
-enable_audit_log = true
+enable_audit_log = false
 
 
 # [persistence] 表定义了数据持久化策略
@@ -39,12 +39,12 @@ aof_filename = "appendonly.aof"
 # "always": 每个写命令都立即同步到磁盘，最安全但最慢。
 # "everysec": 每秒同步一次，性能和安全的良好折中（默认）。
 # "no": 由操作系统决定何时同步，最快但最不安全
-aof_sync_strategy = "everysec"
+aof_sync_strategy = "no"
 
 # RDB 智能快照触发间隔（分钟），至少200个命令或者距离上次快照超过30分钟触发重写压缩体积
-rdb_interval_minutes = 5
+rdb_interval_minutes = 15
 # AOF 文件超过此大小（MB）时触发重写，减少文件体积
-aof_rewrite_size_mb = 64
+aof_rewrite_size_mb = 128
 
 
 # [embedding] 表定义了与外部文本嵌入服务交互的配置
@@ -101,3 +101,25 @@ metrics_port = 9100
   m = 16
   ef_construction = 200
   ef_search = 50 
+
+# [monitoring] 表定义了系统资源监控配置
+[monitoring]
+# 是否启用系统监控 (默认关闭以减少系统开销)
+enabled = false
+# 监控检查间隔，单位：秒
+interval = 30
+
+# CPU 监控配置
+cpu_enabled = true
+# CPU 使用率阈值，超过此值时记录警告 (0.0-1.0)
+cpu_threshold = 0.8
+
+# 内存监控配置
+memory_enabled = true
+# 内存使用阈值，超过此值时记录警告，单位：MB
+memory_threshold = 1024
+
+# 磁盘监控配置 (通常不需要开启，除非有特殊需求)
+disk_enabled = false
+# 磁盘使用阈值，超过此值时记录警告，单位：MB
+disk_threshold = 10240

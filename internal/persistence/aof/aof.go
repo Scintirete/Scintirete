@@ -81,7 +81,7 @@ func NewAOFLogger(filePath string, syncStrategy SyncStrategy) (*AOFLogger, error
 		syncStrategy:    syncStrategy,
 		stopSync:        make(chan struct{}),
 		lastSync:        time.Now(),
-		bufferThreshold: 6 * 1024,        // 6KB buffer threshold
+		bufferThreshold: 64 * 1024,       // 64KB buffer threshold
 		timeThreshold:   5 * time.Minute, // 5 minute time threshold
 	}
 
@@ -703,15 +703,18 @@ func (a *AOFLogger) Truncate() error {
 
 // Close closes the AOF logger and stops background sync
 func (a *AOFLogger) Close() error {
-	// Stop background sync
-	if a.syncTicker != nil {
+	// Stop background sync goroutines - need to close stopSync once for all strategies
+	if a.syncTicker != nil || a.smartSyncTicker != nil {
 		close(a.stopSync)
+	}
+
+	// Wait for background sync to stop
+	if a.syncTicker != nil {
 		a.syncWG.Wait()
 	}
 
-	// Stop smart sync
+	// Wait for smart sync to stop
 	if a.smartSyncTicker != nil {
-		a.smartSyncTicker.Stop()
 		a.smartSyncWG.Wait()
 	}
 

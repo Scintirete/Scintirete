@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/scintirete/scintirete/internal/config"
 	"github.com/scintirete/scintirete/internal/core"
 	"github.com/scintirete/scintirete/internal/core/database"
 	"github.com/scintirete/scintirete/internal/embedding"
@@ -25,6 +26,9 @@ type ServerConfig struct {
 	// Features
 	EnableMetrics  bool `toml:"enable_metrics"`
 	EnableAuditLog bool `toml:"enable_audit_log"`
+
+	// Monitoring
+	MonitoringConfig config.RuntimeMonitoringConfig `toml:"monitoring"`
 }
 
 // Stats contains server statistics
