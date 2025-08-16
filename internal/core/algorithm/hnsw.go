@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"runtime"
 	"sync"
 
 	"github.com/scintirete/scintirete/internal/core"
@@ -19,15 +20,16 @@ type HNSWNode struct {
 	Metadata map[string]interface{} // Associated metadata
 	Deleted  bool                   // Soft delete flag
 
-	// Connections at each layer: layer -> set of connected node IDs
-	Connections []map[uint64]struct{}
+	// Connections at each layer: layer -> slice of connected node IDs
+	// Optimized from map[uint64]struct{} to []uint64 for memory efficiency
+	Connections [][]uint64
 }
 
 // NewHNSWNode creates a new HNSW node
 func NewHNSWNode(id uint64, vector []float32, metadata map[string]interface{}, maxLayers int) *HNSWNode {
-	connections := make([]map[uint64]struct{}, maxLayers)
+	connections := make([][]uint64, maxLayers)
 	for i := range connections {
-		connections[i] = make(map[uint64]struct{})
+		connections[i] = make([]uint64, 0, 8) // Pre-allocate small capacity
 	}
 
 	return &HNSWNode{
@@ -39,25 +41,65 @@ func NewHNSWNode(id uint64, vector []float32, metadata map[string]interface{}, m
 	}
 }
 
-// GetConnections returns the connections at a specific layer
-func (n *HNSWNode) GetConnections(layer int) map[uint64]struct{} {
+// GetConnections returns the connections at a specific layer as a slice
+func (n *HNSWNode) GetConnections(layer int) []uint64 {
 	if layer >= len(n.Connections) {
-		return make(map[uint64]struct{})
+		return []uint64{}
 	}
 	return n.Connections[layer]
+}
+
+// GetConnectionsAsSet returns the connections at a specific layer as a map for set operations
+// Used for backward compatibility with existing code that needs set operations
+func (n *HNSWNode) GetConnectionsAsSet(layer int) map[uint64]struct{} {
+	connections := make(map[uint64]struct{})
+	if layer < len(n.Connections) {
+		for _, connID := range n.Connections[layer] {
+			connections[connID] = struct{}{}
+		}
+	}
+	return connections
+}
+
+// HasConnection checks if a connection exists at a specific layer
+func (n *HNSWNode) HasConnection(layer int, nodeID uint64) bool {
+	if layer >= len(n.Connections) {
+		return false
+	}
+	for _, connID := range n.Connections[layer] {
+		if connID == nodeID {
+			return true
+		}
+	}
+	return false
 }
 
 // AddConnection adds a connection at a specific layer
 func (n *HNSWNode) AddConnection(layer int, nodeID uint64) {
 	if layer < len(n.Connections) {
-		n.Connections[layer][nodeID] = struct{}{}
+		// Check if connection already exists to avoid duplicates
+		for _, connID := range n.Connections[layer] {
+			if connID == nodeID {
+				return // Already exists
+			}
+		}
+		// Add new connection
+		n.Connections[layer] = append(n.Connections[layer], nodeID)
 	}
 }
 
 // RemoveConnection removes a connection at a specific layer
 func (n *HNSWNode) RemoveConnection(layer int, nodeID uint64) {
 	if layer < len(n.Connections) {
-		delete(n.Connections[layer], nodeID)
+		connections := n.Connections[layer]
+		for i, connID := range connections {
+			if connID == nodeID {
+				// Remove by swapping with last element and truncating
+				connections[i] = connections[len(connections)-1]
+				n.Connections[layer] = connections[:len(connections)-1]
+				return
+			}
+		}
 	}
 }
 
@@ -477,7 +519,7 @@ func (h *HNSW) searchLayer(query []float32, entryPoints []uint64, numClosest int
 
 		// Explore neighbors
 		node := h.nodes[current.ID]
-		for neighborID := range node.GetConnections(layer) {
+		for _, neighborID := range node.GetConnections(layer) {
 			if _, alreadyVisited := visited[neighborID]; alreadyVisited {
 				continue
 			}
@@ -554,7 +596,7 @@ func (h *HNSW) pruneConnections(node *HNSWNode, layer int) {
 
 	// Create candidate items
 	candidates := make([]CandidateItem, 0, len(connections))
-	for connectionID := range connections {
+	for _, connectionID := range connections {
 		if connectedNode, exists := h.nodes[connectionID]; exists && !connectedNode.Deleted {
 			distance := h.distCalc.Distance(node.Vector, connectedNode.Vector)
 			candidates = append(candidates, CandidateItem{ID: connectionID, Distance: distance})
@@ -565,7 +607,7 @@ func (h *HNSW) pruneConnections(node *HNSWNode, layer int) {
 	h.sortCandidates(candidates)
 
 	// Clear connections and re-add the selected ones
-	node.Connections[layer] = make(map[uint64]struct{})
+	node.Connections[layer] = make([]uint64, 0, maxConnections)
 	for i := 0; i < min(maxConnections, len(candidates)); i++ {
 		node.AddConnection(layer, candidates[i].ID)
 	}
@@ -596,19 +638,28 @@ func (h *HNSW) updateMemoryUsage() {
 	var usage int64
 
 	for _, node := range h.nodes {
-		// Vector data
-		usage += int64(len(node.Vector) * 4) // 4 bytes per float32
+		// Vector data: 4 bytes per float32
+		usage += int64(len(node.Vector) * 4)
 
-		// ID (8 bytes for uint64)
+		// Node ID: 8 bytes for uint64
 		usage += 8
 
-		// Connections
-		for _, connections := range node.Connections {
-			usage += int64(len(connections) * 16) // Estimate for map overhead
+		// Metadata: rough estimate for map overhead + JSON data
+		if node.Metadata != nil {
+			usage += int64(len(node.Metadata)*32 + 48) // Map overhead + average value size
 		}
 
-		// Node overhead
-		usage += 64 // Estimate for struct overhead
+		// Connections: now much more efficient with []uint64 instead of map
+		for _, connections := range node.Connections {
+			// Slice header: 24 bytes + 8 bytes per connection
+			usage += int64(24 + len(connections)*8)
+		}
+
+		// Slice of connection slices overhead
+		usage += int64(24 + len(node.Connections)*24)
+
+		// Node struct overhead
+		usage += 64
 	}
 
 	h.memoryUsage = usage
@@ -648,31 +699,33 @@ func (h *HNSW) sortSearchResults(results []types.SearchResult) {
 }
 
 // ExportGraphState exports the current graph structure for persistence
+// Optimized to minimize memory allocations and deep copying
 func (h *HNSW) ExportGraphState() core.HNSWGraphState {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	nodes := make(map[uint64]*core.HNSWNodeState)
+	nodes := make(map[uint64]*core.HNSWNodeState, len(h.nodes))
 
 	for id, node := range h.nodes {
-		// Deep copy connections
-		connections := make([]map[uint64]struct{}, len(node.Connections))
+		// Shallow copy connections - only copy the slice structure, not the content
+		connections := make([][]uint64, len(node.Connections))
 		for i, layerConns := range node.Connections {
-			connections[i] = make(map[uint64]struct{})
-			for connID := range layerConns {
-				connections[i][connID] = struct{}{}
+			if len(layerConns) > 0 {
+				// Copy slice content to avoid shared references
+				connections[i] = make([]uint64, len(layerConns))
+				copy(connections[i], layerConns)
+			} else {
+				connections[i] = []uint64{}
 			}
 		}
 
-		// Deep copy metadata
-		metadata := make(map[string]interface{})
-		for k, v := range node.Metadata {
-			metadata[k] = v
-		}
+		// Reference metadata directly - assume it's read-only during export
+		// This eliminates the need for deep copying metadata
+		metadata := node.Metadata
 
-		// Deep copy vector
-		vector := make([]float32, len(node.Vector))
-		copy(vector, node.Vector)
+		// Reference vector directly - assume it's immutable during export
+		// This is the biggest memory saving - no vector data copying
+		vector := node.Vector
 
 		nodes[id] = &core.HNSWNodeState{
 			ID:          node.ID,
@@ -692,36 +745,38 @@ func (h *HNSW) ExportGraphState() core.HNSWGraphState {
 }
 
 // ImportGraphState imports graph structure from persistence, avoiding rebuild
+// Optimized to minimize memory allocations and deep copying
 func (h *HNSW) ImportGraphState(state core.HNSWGraphState) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// Clear existing data
-	h.nodes = make(map[uint64]*HNSWNode)
+	h.nodes = make(map[uint64]*HNSWNode, len(state.Nodes))
 	h.entrypoint = 0
 	h.maxLayer = -1
 	h.size = 0
 
-	// Import nodes
+	// Import nodes with minimal copying
 	for id, nodeState := range state.Nodes {
-		// Deep copy connections
-		connections := make([]map[uint64]struct{}, len(nodeState.Connections))
+		// Copy connections with optimized slice structure
+		connections := make([][]uint64, len(nodeState.Connections))
 		for i, layerConns := range nodeState.Connections {
-			connections[i] = make(map[uint64]struct{})
-			for connID := range layerConns {
-				connections[i][connID] = struct{}{}
+			if len(layerConns) > 0 {
+				// Copy slice content to ensure proper ownership
+				connections[i] = make([]uint64, len(layerConns))
+				copy(connections[i], layerConns)
+			} else {
+				connections[i] = []uint64{}
 			}
 		}
 
-		// Deep copy metadata
-		metadata := make(map[string]interface{})
-		for k, v := range nodeState.Metadata {
-			metadata[k] = v
-		}
+		// Reference metadata directly to avoid copying
+		// Safe because nodeState will not be modified after import
+		metadata := nodeState.Metadata
 
-		// Deep copy vector
-		vector := make([]float32, len(nodeState.Vector))
-		copy(vector, nodeState.Vector)
+		// Reference vector directly to avoid massive memory duplication
+		// This is safe because the imported state should be read-only
+		vector := nodeState.Vector
 
 		h.nodes[id] = &HNSWNode{
 			ID:          nodeState.ID,
@@ -739,6 +794,11 @@ func (h *HNSW) ImportGraphState(state core.HNSWGraphState) error {
 
 	// Update memory usage
 	h.updateMemoryUsage()
+
+	// 在大量数据导入后触发GC，清理临时对象
+	if len(h.nodes) > 1000 {
+		runtime.GC()
+	}
 
 	return nil
 }

@@ -44,7 +44,7 @@ aof_sync_strategy = "no"
 # RDB 智能快照触发间隔（分钟），至少200个命令或者距离上次快照超过30分钟触发重写压缩体积
 rdb_interval_minutes = 15
 # AOF 文件超过此大小（MB）时触发重写，减少文件体积
-aof_rewrite_size_mb = 128
+aof_rewrite_size_mb = 5
 
 
 # [embedding] 表定义了与外部文本嵌入服务交互的配置

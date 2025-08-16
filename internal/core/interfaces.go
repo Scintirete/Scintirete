@@ -147,7 +147,7 @@ type HNSWNodeState struct {
 	Vector      []float32              // Vector data
 	Metadata    map[string]interface{} // Associated metadata
 	Deleted     bool                   // Soft delete flag
-	Connections []map[uint64]struct{}  // Connections at each layer
+	Connections [][]uint64             // Connections at each layer (optimized from map)
 }
 
 // DistanceCalculator defines the interface for distance/similarity calculations.

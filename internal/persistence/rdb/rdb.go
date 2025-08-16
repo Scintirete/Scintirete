@@ -230,6 +230,8 @@ func (r *RDBManager) Load(ctx context.Context) (*RDBSnapshot, error) {
 		return nil, err
 	}
 
+	data = nil
+
 	return snapshot, nil
 }
 
@@ -985,12 +987,12 @@ func ConvertHNSWGraphState(graphState *core.HNSWGraphState) *HNSWGraphSnapshot {
 	nodes := make([]HNSWNodeSnapshot, 0, len(graphState.Nodes))
 
 	for _, nodeState := range graphState.Nodes {
-		// Convert connections
+		// Convert connections from new optimized format
 		layerConnections := make([]LayerConnectionsSnapshot, 0, len(nodeState.Connections))
 		for layer, connections := range nodeState.Connections {
 			if len(connections) > 0 {
 				connectedIDs := make([]string, 0, len(connections))
-				for connID := range connections {
+				for _, connID := range connections {
 					connectedIDs = append(connectedIDs, fmt.Sprintf("%d", connID))
 				}
 				layerConnections = append(layerConnections, LayerConnectionsSnapshot{
@@ -1036,11 +1038,11 @@ func ConvertHNSWGraphSnapshot(graphSnapshot *HNSWGraphSnapshot) (*core.HNSWGraph
 			return nil, utils.ErrCorruptedData("failed to parse node ID: " + err.Error())
 		}
 
-		// Convert connections
+		// Convert connections to new optimized format
 		maxLayers := nodeSnapshot.MaxLayer + 1
-		connections := make([]map[uint64]struct{}, maxLayers)
+		connections := make([][]uint64, maxLayers)
 		for i := range connections {
-			connections[i] = make(map[uint64]struct{})
+			connections[i] = make([]uint64, 0)
 		}
 
 		for _, layerConn := range nodeSnapshot.LayerConnections {
@@ -1050,7 +1052,7 @@ func ConvertHNSWGraphSnapshot(graphSnapshot *HNSWGraphSnapshot) (*core.HNSWGraph
 					if err != nil {
 						continue // Skip invalid IDs
 					}
-					connections[layerConn.Layer][connID] = struct{}{}
+					connections[layerConn.Layer] = append(connections[layerConn.Layer], connID)
 				}
 			}
 		}

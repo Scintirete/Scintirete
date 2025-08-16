@@ -81,7 +81,7 @@ func NewAOFLogger(filePath string, syncStrategy SyncStrategy) (*AOFLogger, error
 		syncStrategy:    syncStrategy,
 		stopSync:        make(chan struct{}),
 		lastSync:        time.Now(),
-		bufferThreshold: 64 * 1024,       // 64KB buffer threshold
+		bufferThreshold: 6 * 1024,        // 6KB buffer threshold
 		timeThreshold:   5 * time.Minute, // 5 minute time threshold
 	}
 
@@ -199,6 +199,10 @@ func (a *AOFLogger) Replay(ctx context.Context, handler func(types.AOFCommand) e
 		if err := handler(*command); err != nil {
 			return utils.ErrRecoveryFailed(fmt.Sprintf("failed to replay AOF command at command %d: %v", commandNum, err))
 		}
+
+		// 立即释放命令数据，避免内存累积
+		data = nil
+		command = nil
 
 		// Check for context cancellation
 		select {
