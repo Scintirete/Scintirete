@@ -22,15 +22,15 @@ import (
 type Server struct {
 	pb.UnimplementedScintireteServiceServer
 
-	mu          sync.RWMutex
-	engine      *database.Engine
-	persistence *persistence.Manager
-	embedding   *embedding.Client
-	config      server.ServerConfig
-	logger      core.Logger
-	auditLogger *audit.Logger
-	auth        server.Authenticator
-	cpuMonitor  *monitoring.CPUMonitor
+	mu            sync.RWMutex
+	engine        *database.Engine
+	persistence   *persistence.Manager
+	embedding     *embedding.Client
+	config        server.ServerConfig
+	logger        core.Logger
+	auditLogger   *audit.Logger
+	auth          server.Authenticator
+	systemMonitor *monitoring.SystemMonitor
 
 	// Statistics
 	startTime    time.Time
@@ -86,28 +86,28 @@ func NewServer(config server.ServerConfig) (*Server, error) {
 		auditLogger, _ = audit.NewLogger(audit.Config{Enabled: false})
 	}
 
-	// Create CPU monitor for performance monitoring (优化：降低监控频率减少系统开销)
-	cpuMonitor := monitoring.NewCPUMonitor(serverLogger, 30*time.Second, 0.8)
+	// Create system monitor for performance monitoring
+	systemMonitor := monitoring.NewSystemMonitor(serverLogger, config.MonitoringConfig)
 
 	return &Server{
-		engine:      engine,
-		persistence: persistenceManager,
-		embedding:   embeddingClient,
-		config:      config,
-		logger:      serverLogger,
-		auditLogger: auditLogger,
-		auth:        auth,
-		cpuMonitor:  cpuMonitor,
-		startTime:   time.Now(),
+		engine:        engine,
+		persistence:   persistenceManager,
+		embedding:     embeddingClient,
+		config:        config,
+		logger:        serverLogger,
+		auditLogger:   auditLogger,
+		auth:          auth,
+		systemMonitor: systemMonitor,
+		startTime:     time.Now(),
 	}, nil
 }
 
 // Start starts the server and recovery process
 func (s *Server) Start(ctx context.Context) error {
-	// Start CPU monitoring
-	if err := s.cpuMonitor.Start(ctx); err != nil {
-		s.logger.Error(ctx, "Failed to start CPU monitoring", err, nil)
-		// Don't fail server startup for CPU monitoring issues
+	// Start system monitoring
+	if err := s.systemMonitor.Start(ctx); err != nil {
+		s.logger.Error(ctx, "Failed to start system monitoring", err, nil)
+		// Don't fail server startup for monitoring issues
 	}
 
 	// Start persistence manager background tasks
@@ -121,9 +121,9 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	s.logger.Info(ctx, "Server started successfully", map[string]interface{}{
-		"cpu_monitoring_enabled": true,
-		"monitoring_interval":    "30s", // 更新为30秒
-		"cpu_threshold":          "80%",
+		"system_monitoring_enabled": s.config.MonitoringConfig.Enabled,
+		"monitoring_interval":       fmt.Sprintf("%ds", int(s.config.MonitoringConfig.Interval.Seconds())),
+		"cpu_threshold":             fmt.Sprintf("%.1f%%", s.config.MonitoringConfig.CPUThreshold*100),
 	})
 
 	return nil
@@ -131,8 +131,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Stop gracefully stops the server
 func (s *Server) Stop(ctx context.Context) error {
-	// Stop CPU monitoring
-	s.cpuMonitor.Stop()
+	// Stop system monitoring
+	s.systemMonitor.Stop()
 
 	// Stop persistence manager
 	if err := s.persistence.Stop(ctx); err != nil {

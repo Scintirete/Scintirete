@@ -21,6 +21,7 @@ type Config struct {
 	Embedding     EmbeddingConfig     `toml:"embedding"`
 	Observability ObservabilityConfig `toml:"observability"`
 	Algorithm     AlgorithmConfig     `toml:"algorithm"`
+	Monitoring    MonitoringConfig    `toml:"monitoring"`
 }
 
 // ServerConfig contains network and authentication settings.
@@ -87,6 +88,18 @@ type HNSWDefaultsConfig struct {
 	EfSearch       int `toml:"ef_search"`
 }
 
+// MonitoringConfig contains system monitoring settings.
+type MonitoringConfig struct {
+	Enabled         bool    `toml:"enabled"`          // 是否启用系统监控
+	Interval        int     `toml:"interval"`         // 监控间隔（秒）
+	CPUEnabled      bool    `toml:"cpu_enabled"`      // 是否启用CPU监控
+	CPUThreshold    float64 `toml:"cpu_threshold"`    // CPU使用率阈值（0.0-1.0）
+	MemoryEnabled   bool    `toml:"memory_enabled"`   // 是否启用内存监控
+	MemoryThreshold int     `toml:"memory_threshold"` // 内存使用阈值（MB）
+	DiskEnabled     bool    `toml:"disk_enabled"`     // 是否启用磁盘监控
+	DiskThreshold   int     `toml:"disk_threshold"`   // 磁盘使用阈值（MB）
+}
+
 // DefaultConfig returns a configuration with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
@@ -133,6 +146,16 @@ func DefaultConfig() *Config {
 				EfConstruction: 200,
 				EfSearch:       50,
 			},
+		},
+		Monitoring: MonitoringConfig{
+			Enabled:         false, // 默认关闭监控
+			Interval:        30,    // 30秒间隔
+			CPUEnabled:      true,  // 启用时默认监控CPU
+			CPUThreshold:    0.8,   // 80%阈值
+			MemoryEnabled:   true,  // 启用时默认监控内存
+			MemoryThreshold: 1024,  // 1GB阈值
+			DiskEnabled:     false, // 默认不监控磁盘
+			DiskThreshold:   10240, // 10GB阈值
 		},
 	}
 }
@@ -264,6 +287,22 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("HNSW ef_search must be positive: %d", c.Algorithm.HNSWDefaults.EfSearch)
 	}
 
+	// Validate monitoring config
+	if c.Monitoring.Enabled {
+		if c.Monitoring.Interval <= 0 {
+			return fmt.Errorf("monitoring interval must be positive: %d", c.Monitoring.Interval)
+		}
+		if c.Monitoring.CPUThreshold < 0 || c.Monitoring.CPUThreshold > 1 {
+			return fmt.Errorf("CPU threshold must be between 0.0 and 1.0: %f", c.Monitoring.CPUThreshold)
+		}
+		if c.Monitoring.MemoryThreshold <= 0 {
+			return fmt.Errorf("memory threshold must be positive: %d", c.Monitoring.MemoryThreshold)
+		}
+		if c.Monitoring.DiskThreshold <= 0 {
+			return fmt.Errorf("disk threshold must be positive: %d", c.Monitoring.DiskThreshold)
+		}
+	}
+
 	return nil
 }
 
@@ -379,5 +418,31 @@ func (c *Config) ToEmbeddingConfig() embedding.Config {
 		Timeout:      30 * time.Second, // Default timeout
 		Models:       embeddingModels,
 		DefaultModel: c.Embedding.DefaultModel,
+	}
+}
+
+// RuntimeMonitoringConfig is the monitoring configuration used by the monitoring package
+type RuntimeMonitoringConfig struct {
+	Enabled         bool
+	Interval        time.Duration
+	CPUEnabled      bool
+	CPUThreshold    float64
+	MemoryEnabled   bool
+	MemoryThreshold uint64 // in bytes
+	DiskEnabled     bool
+	DiskThreshold   uint64 // in bytes
+}
+
+// ToMonitoringConfig converts to monitoring config with proper type conversions
+func (c *Config) ToMonitoringConfig() RuntimeMonitoringConfig {
+	return RuntimeMonitoringConfig{
+		Enabled:         c.Monitoring.Enabled,
+		Interval:        time.Duration(c.Monitoring.Interval) * time.Second,
+		CPUEnabled:      c.Monitoring.CPUEnabled,
+		CPUThreshold:    c.Monitoring.CPUThreshold,
+		MemoryEnabled:   c.Monitoring.MemoryEnabled,
+		MemoryThreshold: uint64(c.Monitoring.MemoryThreshold) * 1024 * 1024, // Convert MB to bytes
+		DiskEnabled:     c.Monitoring.DiskEnabled,
+		DiskThreshold:   uint64(c.Monitoring.DiskThreshold) * 1024 * 1024, // Convert MB to bytes
 	}
 }

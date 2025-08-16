@@ -101,3 +101,25 @@ metrics_port = 9100
   m = 16
   ef_construction = 200
   ef_search = 50 
+
+# [monitoring] 表定义了系统资源监控配置
+[monitoring]
+# 是否启用系统监控 (默认关闭以减少系统开销)
+enabled = false
+# 监控检查间隔，单位：秒
+interval = 30
+
+# CPU 监控配置
+cpu_enabled = true
+# CPU 使用率阈值，超过此值时记录警告 (0.0-1.0)
+cpu_threshold = 0.8
+
+# 内存监控配置
+memory_enabled = true
+# 内存使用阈值，超过此值时记录警告，单位：MB
+memory_threshold = 1024
+
+# 磁盘监控配置 (通常不需要开启，除非有特殊需求)
+disk_enabled = false
+# 磁盘使用阈值，超过此值时记录警告，单位：MB
+disk_threshold = 10240

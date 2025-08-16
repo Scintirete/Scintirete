@@ -99,9 +99,10 @@ func main() {
 			RDBInterval:     time.Duration(cfg.Persistence.RDBIntervalMinutes) * time.Minute,
 			AOFRewriteSize:  int64(cfg.Persistence.AOFRewriteSizeMB) * 1024 * 1024,
 		},
-		EmbeddingConfig: cfg.ToEmbeddingConfig(),
-		EnableMetrics:   cfg.Observability.MetricsEnabled,
-		EnableAuditLog:  cfg.Log.EnableAuditLog,
+		EmbeddingConfig:  cfg.ToEmbeddingConfig(),
+		EnableMetrics:    cfg.Observability.MetricsEnabled,
+		EnableAuditLog:   cfg.Log.EnableAuditLog,
+		MonitoringConfig: cfg.ToMonitoringConfig(),
 	}
 
 	// Create gRPC server
