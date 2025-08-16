@@ -703,15 +703,18 @@ func (a *AOFLogger) Truncate() error {
 
 // Close closes the AOF logger and stops background sync
 func (a *AOFLogger) Close() error {
-	// Stop background sync
-	if a.syncTicker != nil {
+	// Stop background sync goroutines - need to close stopSync once for all strategies
+	if a.syncTicker != nil || a.smartSyncTicker != nil {
 		close(a.stopSync)
+	}
+
+	// Wait for background sync to stop
+	if a.syncTicker != nil {
 		a.syncWG.Wait()
 	}
 
-	// Stop smart sync
+	// Wait for smart sync to stop
 	if a.smartSyncTicker != nil {
-		a.smartSyncTicker.Stop()
 		a.smartSyncWG.Wait()
 	}
 
