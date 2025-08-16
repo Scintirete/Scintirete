@@ -3,6 +3,7 @@ package persistence
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ type Manager struct {
 	// Background tasks
 	stopTasks chan struct{}
 	taskWG    sync.WaitGroup
+	stopped   bool // Protected by mu
 
 	// Statistics
 	stats Stats
@@ -97,7 +99,7 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 		config.RDBInterval = 5 * time.Minute // Default: save RDB every 5 minutes
 	}
 	if config.AOFRewriteSize == 0 {
-		config.AOFRewriteSize = 64 * 1024 * 1024 // Default: rewrite when AOF exceeds 64MB
+		config.AOFRewriteSize = 5 * 1024 * 1024 // Default: rewrite when AOF exceeds 5MB
 	}
 
 	// Create default logger if not provided in config
@@ -121,6 +123,7 @@ func NewManagerWithEngine(config Config, dbEngine DatabaseEngine) (*Manager, err
 		cmdBuilder: aof.NewCommandBuilder(),
 		config:     config,
 		stopTasks:  make(chan struct{}),
+		stopped:    false,
 		logger:     persistenceLogger,
 		// 初始化智能状态跟踪
 		lastAOFCommandTime:  time.Time{},
@@ -216,6 +219,14 @@ func (m *Manager) Recover(ctx context.Context) error {
 				"component": "persistence_recovery",
 			})
 		}
+
+		// 立即释放RDB快照数据 - 已经应用到数据库引擎中
+		snapshot = nil
+		// 主动触发GC释放RDB反序列化产生的大量临时对象
+		runtime.GC()
+		m.logger.Debug(ctx, "RDB snapshot data released and GC triggered", map[string]interface{}{
+			"component": "persistence_recovery",
+		})
 	} else {
 		m.logger.Info(ctx, "No RDB snapshot found, proceeding with AOF-only recovery", map[string]interface{}{
 			"component": "persistence_recovery",
@@ -264,6 +275,16 @@ func (m *Manager) Recover(ctx context.Context) error {
 				"format":      "FlatBuffers",
 			})
 		}
+
+		// 在大量命令重放过程中定期触发GC释放临时对象
+		if commandCount%5000 == 0 {
+			runtime.GC()
+			m.logger.Debug(ctx, "AOF replay GC triggered", map[string]interface{}{
+				"component":         "persistence_recovery",
+				"commands_replayed": commandCount,
+			})
+		}
+
 		return nil
 	})
 
@@ -274,6 +295,13 @@ func (m *Manager) Recover(ctx context.Context) error {
 		})
 		return utils.ErrRecoveryFailed("failed to replay AOF: " + err.Error())
 	}
+
+	// 最终GC触发 - 清理AOF重放过程中的所有临时对象
+	runtime.GC()
+	m.logger.Info(ctx, "Final GC triggered after data recovery", map[string]interface{}{
+		"component":         "persistence_recovery",
+		"commands_replayed": commandCount,
+	})
 
 	// Update statistics
 	m.stats.RecoveryTime = time.Since(startTime)
@@ -348,17 +376,24 @@ func (m *Manager) StartBackgroundTasks(ctx context.Context) error {
 
 // Stop gracefully stops all persistence operations
 func (m *Manager) Stop(ctx context.Context) error {
+	// Check if already stopped
+	m.mu.Lock()
+	if m.stopped {
+		m.mu.Unlock()
+		return nil
+	}
+	m.stopped = true
+	m.mu.Unlock()
+
+	// Signal background tasks to stop
+	close(m.stopTasks)
+
+	// Wait for tasks to complete outside of lock to avoid deadlock
+	m.taskWG.Wait()
+
+	// Acquire lock for final cleanup
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Stop background tasks if not already stopped
-	select {
-	case <-m.stopTasks:
-		// Already closed
-	default:
-		close(m.stopTasks)
-		m.taskWG.Wait()
-	}
 
 	// Close persistence components
 	if err := m.aofLogger.Close(); err != nil {
@@ -594,7 +629,7 @@ func DefaultConfig(dataDir string) Config {
 		AOFFilename:     "appendonly.aof",
 		AOFSyncStrategy: "everysec",
 		RDBInterval:     5 * time.Minute,
-		AOFRewriteSize:  64 * 1024 * 1024, // 64MB
+		AOFRewriteSize:  5 * 1024 * 1024, // 5MB
 	}
 }
 

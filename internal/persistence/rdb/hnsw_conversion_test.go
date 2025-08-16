@@ -17,9 +17,9 @@ func TestConvertHNSWGraphState(t *testing.T) {
 				Vector:   []float32{1.0, 2.0, 3.0},
 				Metadata: map[string]interface{}{"label": "node1"},
 				Deleted:  false,
-				Connections: []map[uint64]struct{}{
-					{2: {}}, // Layer 0
-					{},      // Layer 1
+				Connections: [][]uint64{
+					{2}, // Layer 0
+					{},  // Layer 1
 				},
 			},
 			2: {
@@ -27,8 +27,8 @@ func TestConvertHNSWGraphState(t *testing.T) {
 				Vector:   []float32{4.0, 5.0, 6.0},
 				Metadata: map[string]interface{}{"label": "node2"},
 				Deleted:  false,
-				Connections: []map[uint64]struct{}{
-					{1: {}, 3: {}}, // Layer 0
+				Connections: [][]uint64{
+					{1, 3}, // Layer 0
 				},
 			},
 			3: {
@@ -36,8 +36,8 @@ func TestConvertHNSWGraphState(t *testing.T) {
 				Vector:   []float32{7.0, 8.0, 9.0},
 				Metadata: map[string]interface{}{"label": "node3"},
 				Deleted:  false,
-				Connections: []map[uint64]struct{}{
-					{2: {}}, // Layer 0
+				Connections: [][]uint64{
+					{2}, // Layer 0
 				},
 			},
 		},
@@ -167,26 +167,25 @@ func TestConvertHNSWGraphSnapshot(t *testing.T) {
 	assert.Len(t, node1.Connections, 2)    // MaxLayer + 1
 	assert.Len(t, node1.Connections[0], 1) // Layer 0 有一个连接
 	assert.Len(t, node1.Connections[1], 0) // Layer 1 没有连接
-	_, hasConnection := node1.Connections[0][2]
-	assert.True(t, hasConnection)
+	// 验证layer 0的连接包含节点2
+	assert.Contains(t, node1.Connections[0], uint64(2))
 
 	// 验证节点2
 	node2, exists := graphState.Nodes[2]
 	require.True(t, exists)
 	assert.Equal(t, uint64(2), node2.ID)
 	assert.Len(t, node2.Connections[0], 2) // Layer 0 有两个连接
-	_, hasConn1 := node2.Connections[0][1]
-	_, hasConn3 := node2.Connections[0][3]
-	assert.True(t, hasConn1)
-	assert.True(t, hasConn3)
+	// 验证layer 0的连接包含节点1和3
+	assert.Contains(t, node2.Connections[0], uint64(1))
+	assert.Contains(t, node2.Connections[0], uint64(3))
 
 	// 验证节点3
 	node3, exists := graphState.Nodes[3]
 	require.True(t, exists)
 	assert.Equal(t, uint64(3), node3.ID)
 	assert.Len(t, node3.Connections[0], 1) // Layer 0 有一个连接
-	_, hasConnection = node3.Connections[0][2]
-	assert.True(t, hasConnection)
+	// 验证layer 0的连接包含节点2
+	assert.Contains(t, node3.Connections[0], uint64(2))
 }
 
 func TestConvertHNSWGraphState_Nil(t *testing.T) {
@@ -279,10 +278,10 @@ func TestRoundTripConversion(t *testing.T) {
 				Vector:   []float32{10.0, 20.0, 30.0},
 				Metadata: map[string]interface{}{"type": "test", "value": 42},
 				Deleted:  false,
-				Connections: []map[uint64]struct{}{
-					{20: {}, 30: {}}, // Layer 0
-					{20: {}},         // Layer 1
-					{},               // Layer 2
+				Connections: [][]uint64{
+					{20, 30}, // Layer 0
+					{20},     // Layer 1
+					{},       // Layer 2
 				},
 			},
 			20: {
@@ -290,9 +289,9 @@ func TestRoundTripConversion(t *testing.T) {
 				Vector:   []float32{40.0, 50.0, 60.0},
 				Metadata: map[string]interface{}{"type": "test", "value": 84},
 				Deleted:  false,
-				Connections: []map[uint64]struct{}{
-					{10: {}, 30: {}}, // Layer 0
-					{10: {}},         // Layer 1
+				Connections: [][]uint64{
+					{10, 30}, // Layer 0
+					{10},     // Layer 1
 				},
 			},
 			30: {
@@ -300,8 +299,8 @@ func TestRoundTripConversion(t *testing.T) {
 				Vector:   []float32{70.0, 80.0, 90.0},
 				Metadata: map[string]interface{}{"type": "test", "value": 126},
 				Deleted:  false,
-				Connections: []map[uint64]struct{}{
-					{10: {}, 20: {}}, // Layer 0
+				Connections: [][]uint64{
+					{10, 20}, // Layer 0
 				},
 			},
 		},
@@ -342,9 +341,9 @@ func TestRoundTripConversion(t *testing.T) {
 			assert.Equal(t, len(originalConns), len(recoveredConns),
 				"Layer %d of node %d should have same number of connections", layer, id)
 
-			for connID := range originalConns {
-				_, exists := recoveredConns[connID]
-				assert.True(t, exists, "Connection to node %d should exist in layer %d of node %d",
+			// 验证所有原始连接都在恢复的连接中
+			for _, connID := range originalConns {
+				assert.Contains(t, recoveredConns, connID, "Connection to node %d should exist in layer %d of node %d",
 					connID, layer, id)
 			}
 		}

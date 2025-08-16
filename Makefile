@@ -125,7 +125,7 @@ cpu-monitor: proto-gen flatbuffers-gen ## 构建CPU监控工具
 
 test: proto-gen flatbuffers-gen ## 运行测试
 	@echo "Running tests..."
-	$(GO) test -v -race -cover ./...
+	$(GO) test -v -race -cover ./... -timeout=60s
 
 test-coverage: proto-gen flatbuffers-gen ## 运行测试并生成覆盖率报告
 	@echo "Running tests with coverage..."
