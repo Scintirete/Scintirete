@@ -81,7 +81,7 @@ func NewAOFLogger(filePath string, syncStrategy SyncStrategy) (*AOFLogger, error
 		syncStrategy:    syncStrategy,
 		stopSync:        make(chan struct{}),
 		lastSync:        time.Now(),
-		bufferThreshold: 6 * 1024,        // 6KB buffer threshold
+		bufferThreshold: 64 * 1024,       // 64KB buffer threshold
 		timeThreshold:   5 * time.Minute, // 5 minute time threshold
 	}
 
