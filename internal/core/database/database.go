@@ -339,8 +339,10 @@ func (e *Engine) GetDatabaseState(ctx context.Context) (map[string]rdb.DatabaseS
 				continue // Skip collections that can't be accessed
 			}
 
-			// Extract all vectors from collection
+			// Extract all vectors from collection and HNSW graph state
 			vectors := make([]types.Vector, 0)
+			var hnswGraphState *core.HNSWGraphState
+
 			if dbCollection, ok := collection.(*Collection); ok {
 				dbCollection.mu.RLock()
 				for _, vector := range dbCollection.vectors {
@@ -358,6 +360,15 @@ func (e *Engine) GetDatabaseState(ctx context.Context) (map[string]rdb.DatabaseS
 						vectors = append(vectors, vectorCopy)
 					}
 				}
+
+				// Export HNSW graph state if index exists
+				if dbCollection.index != nil {
+					if hnswIndex, ok := dbCollection.index.(core.HNSWIndex); ok {
+						graphState := hnswIndex.ExportGraphState()
+						hnswGraphState = &graphState
+					}
+				}
+
 				dbCollection.mu.RUnlock()
 			}
 
@@ -365,6 +376,7 @@ func (e *Engine) GetDatabaseState(ctx context.Context) (map[string]rdb.DatabaseS
 				Name:         collInfo.Name,
 				Config:       convertCollectionInfoToConfig(collInfo),
 				Vectors:      vectors,
+				HNSWGraph:    hnswGraphState,      // Include HNSW graph state
 				VectorCount:  int64(len(vectors)), // Fix: Use actual count of saved vectors
 				DeletedCount: 0,                   // Fix: No deleted vectors in snapshot
 				CreatedAt:    collInfo.CreatedAt,
@@ -416,27 +428,61 @@ func (e *Engine) RestoreFromSnapshot(ctx context.Context, snapshot *rdb.RDBSnaps
 				return fmt.Errorf("failed to get collection %s after creation: %w", collName, err)
 			}
 
-			// Insert vectors if any exist
-			if len(collSnapshot.Vectors) > 0 {
-				if err := collection.Insert(ctx, collSnapshot.Vectors); err != nil {
-					return fmt.Errorf("failed to insert vectors into collection %s: %w", collName, err)
-				}
-			}
-
-			// Update collection metadata and ensure nextID is correct
+			// Restore vectors and HNSW graph efficiently
 			if dbCollection, ok := collection.(*Collection); ok {
 				dbCollection.mu.Lock()
+
+				// Directly restore vectors to collection state (避免触发索引重建)
+				if len(collSnapshot.Vectors) > 0 {
+					for _, vector := range collSnapshot.Vectors {
+						vectorCopy := &types.Vector{
+							ID:       vector.ID,
+							Elements: make([]float32, len(vector.Elements)),
+							Metadata: make(map[string]interface{}),
+						}
+						copy(vectorCopy.Elements, vector.Elements)
+						for k, v := range vector.Metadata {
+							vectorCopy.Metadata[k] = v
+						}
+						dbCollection.vectors[vector.ID] = vectorCopy
+					}
+				}
+
+				// Update metadata
 				dbCollection.createdAt = collSnapshot.CreatedAt
 				dbCollection.updatedAt = collSnapshot.UpdatedAt
-
-				// The snapshot now contains correct counts:
-				// - VectorCount = actual vectors in snapshot
-				// - DeletedCount = 0 (no deleted vectors in snapshot)
-				// The Insert() method already set vectorCount correctly
-				// deletedCount starts at 0, which is correct
-
+				dbCollection.vectorCount = collSnapshot.VectorCount
+				dbCollection.deletedCount = collSnapshot.DeletedCount
 				dbCollection.updateNextID() // Ensure nextID is set correctly
+
 				dbCollection.mu.Unlock()
+
+				// 强制要求HNSW图状态存在，不再支持fallback重建
+				if collSnapshot.HNSWGraph == nil {
+					return fmt.Errorf("HNSW graph state missing in RDB for collection %s - cannot restore without graph data", collName)
+				}
+
+				// Convert RDB HNSWGraphSnapshot to core.HNSWGraphState
+				graphState, err := rdb.ConvertHNSWGraphSnapshot(collSnapshot.HNSWGraph)
+				if err != nil {
+					return fmt.Errorf("failed to convert HNSW graph snapshot for collection %s: %w", collName, err)
+				}
+
+				// Import graph state directly into HNSW index
+				if dbCollection.index == nil {
+					return fmt.Errorf("HNSW index not initialized for collection %s", collName)
+				}
+
+				hnswIndex, ok := dbCollection.index.(core.HNSWIndex)
+				if !ok {
+					return fmt.Errorf("collection %s does not use HNSW index", collName)
+				}
+
+				if err := hnswIndex.ImportGraphState(*graphState); err != nil {
+					return fmt.Errorf("failed to import HNSW graph state for collection %s: %w", collName, err)
+				}
+			} else {
+				return fmt.Errorf("collection %s is not a database Collection type", collName)
 			}
 		}
 

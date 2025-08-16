@@ -125,6 +125,29 @@ type HNSWIndex interface {
 
 	// SetEfSearch dynamically updates the ef_search parameter for queries.
 	SetEfSearch(efSearch int)
+
+	// ExportGraphState exports the current graph structure for persistence.
+	ExportGraphState() HNSWGraphState
+
+	// ImportGraphState imports graph structure from persistence, avoiding rebuild.
+	ImportGraphState(state HNSWGraphState) error
+}
+
+// HNSWGraphState represents the internal state of an HNSW graph for serialization.
+type HNSWGraphState struct {
+	Nodes      map[uint64]*HNSWNodeState // All nodes indexed by ID
+	EntryPoint uint64                    // ID of the entry point node
+	MaxLayer   int                       // Current maximum layer
+	Size       int                       // Number of active nodes
+}
+
+// HNSWNodeState represents the internal state of an HNSW node for serialization.
+type HNSWNodeState struct {
+	ID          uint64                 // Vector ID
+	Vector      []float32              // Vector data
+	Metadata    map[string]interface{} // Associated metadata
+	Deleted     bool                   // Soft delete flag
+	Connections []map[uint64]struct{}  // Connections at each layer
 }
 
 // DistanceCalculator defines the interface for distance/similarity calculations.

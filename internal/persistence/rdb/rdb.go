@@ -12,6 +12,7 @@ import (
 	"time"
 
 	flatbuffers "github.com/google/flatbuffers/go"
+	"github.com/scintirete/scintirete/internal/core"
 	fbrdb "github.com/scintirete/scintirete/internal/flatbuffers/rdb"
 	"github.com/scintirete/scintirete/internal/utils"
 	"github.com/scintirete/scintirete/pkg/types"
@@ -88,6 +89,7 @@ type CollectionState struct {
 	Name         string                 `json:"name"`
 	Config       types.CollectionConfig `json:"config"`
 	Vectors      []types.Vector         `json:"vectors"`
+	HNSWGraph    *core.HNSWGraphState   `json:"hnsw_graph,omitempty"` // HNSW graph state
 	VectorCount  int64                  `json:"vector_count"`
 	DeletedCount int64                  `json:"deleted_count"`
 	CreatedAt    time.Time              `json:"created_at"`
@@ -848,6 +850,7 @@ func (r *RDBManager) CreateSnapshot(databases map[string]DatabaseState) RDBSnaps
 				Name:         collName,
 				Config:       collState.Config,
 				Vectors:      collState.Vectors,
+				HNSWGraph:    ConvertHNSWGraphState(collState.HNSWGraph), // Convert and include HNSW graph
 				VectorCount:  collState.VectorCount,
 				DeletedCount: collState.DeletedCount,
 				CreatedAt:    collState.CreatedAt,
@@ -971,4 +974,116 @@ func (bm *BackupManager) RestoreFromBackup(ctx context.Context, backupPath strin
 
 	// Save as current RDB
 	return bm.rdbManager.Save(ctx, *snapshot)
+}
+
+// ConvertHNSWGraphState converts core.HNSWGraphState to RDB HNSWGraphSnapshot
+func ConvertHNSWGraphState(graphState *core.HNSWGraphState) *HNSWGraphSnapshot {
+	if graphState == nil {
+		return nil
+	}
+
+	nodes := make([]HNSWNodeSnapshot, 0, len(graphState.Nodes))
+
+	for _, nodeState := range graphState.Nodes {
+		// Convert connections
+		layerConnections := make([]LayerConnectionsSnapshot, 0, len(nodeState.Connections))
+		for layer, connections := range nodeState.Connections {
+			if len(connections) > 0 {
+				connectedIDs := make([]string, 0, len(connections))
+				for connID := range connections {
+					connectedIDs = append(connectedIDs, fmt.Sprintf("%d", connID))
+				}
+				layerConnections = append(layerConnections, LayerConnectionsSnapshot{
+					Layer:            layer,
+					ConnectedNodeIDs: connectedIDs,
+				})
+			}
+		}
+
+		// Convert node
+		nodeSnapshot := HNSWNodeSnapshot{
+			ID:               fmt.Sprintf("%d", nodeState.ID),
+			Elements:         nodeState.Vector,
+			Metadata:         nodeState.Metadata,
+			Deleted:          nodeState.Deleted,
+			LayerConnections: layerConnections,
+			MaxLayer:         len(nodeState.Connections) - 1,
+		}
+
+		nodes = append(nodes, nodeSnapshot)
+	}
+
+	return &HNSWGraphSnapshot{
+		Nodes:        nodes,
+		EntryPointID: fmt.Sprintf("%d", graphState.EntryPoint),
+		MaxLayer:     graphState.MaxLayer,
+		Size:         graphState.Size,
+	}
+}
+
+// ConvertHNSWGraphSnapshot converts RDB HNSWGraphSnapshot to core.HNSWGraphState
+func ConvertHNSWGraphSnapshot(graphSnapshot *HNSWGraphSnapshot) (*core.HNSWGraphState, error) {
+	if graphSnapshot == nil {
+		return nil, nil
+	}
+
+	nodes := make(map[uint64]*core.HNSWNodeState)
+
+	for _, nodeSnapshot := range graphSnapshot.Nodes {
+		// Parse node ID
+		id, err := strconv.ParseUint(nodeSnapshot.ID, 10, 64)
+		if err != nil {
+			return nil, utils.ErrCorruptedData("failed to parse node ID: " + err.Error())
+		}
+
+		// Convert connections
+		maxLayers := nodeSnapshot.MaxLayer + 1
+		connections := make([]map[uint64]struct{}, maxLayers)
+		for i := range connections {
+			connections[i] = make(map[uint64]struct{})
+		}
+
+		for _, layerConn := range nodeSnapshot.LayerConnections {
+			if layerConn.Layer < maxLayers {
+				for _, connIDStr := range layerConn.ConnectedNodeIDs {
+					connID, err := strconv.ParseUint(connIDStr, 10, 64)
+					if err != nil {
+						continue // Skip invalid IDs
+					}
+					connections[layerConn.Layer][connID] = struct{}{}
+				}
+			}
+		}
+
+		// Deep copy metadata
+		metadata := make(map[string]interface{})
+		for k, v := range nodeSnapshot.Metadata {
+			metadata[k] = v
+		}
+
+		// Deep copy vector
+		vector := make([]float32, len(nodeSnapshot.Elements))
+		copy(vector, nodeSnapshot.Elements)
+
+		nodes[id] = &core.HNSWNodeState{
+			ID:          id,
+			Vector:      vector,
+			Metadata:    metadata,
+			Deleted:     nodeSnapshot.Deleted,
+			Connections: connections,
+		}
+	}
+
+	// Parse entry point ID
+	entryPointID, err := strconv.ParseUint(graphSnapshot.EntryPointID, 10, 64)
+	if err != nil {
+		return nil, utils.ErrCorruptedData("failed to parse entry point ID: " + err.Error())
+	}
+
+	return &core.HNSWGraphState{
+		Nodes:      nodes,
+		EntryPoint: entryPointID,
+		MaxLayer:   graphSnapshot.MaxLayer,
+		Size:       graphSnapshot.Size,
+	}, nil
 }

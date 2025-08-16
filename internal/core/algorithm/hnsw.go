@@ -647,6 +647,102 @@ func (h *HNSW) sortSearchResults(results []types.SearchResult) {
 	}
 }
 
+// ExportGraphState exports the current graph structure for persistence
+func (h *HNSW) ExportGraphState() core.HNSWGraphState {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	nodes := make(map[uint64]*core.HNSWNodeState)
+
+	for id, node := range h.nodes {
+		// Deep copy connections
+		connections := make([]map[uint64]struct{}, len(node.Connections))
+		for i, layerConns := range node.Connections {
+			connections[i] = make(map[uint64]struct{})
+			for connID := range layerConns {
+				connections[i][connID] = struct{}{}
+			}
+		}
+
+		// Deep copy metadata
+		metadata := make(map[string]interface{})
+		for k, v := range node.Metadata {
+			metadata[k] = v
+		}
+
+		// Deep copy vector
+		vector := make([]float32, len(node.Vector))
+		copy(vector, node.Vector)
+
+		nodes[id] = &core.HNSWNodeState{
+			ID:          node.ID,
+			Vector:      vector,
+			Metadata:    metadata,
+			Deleted:     node.Deleted,
+			Connections: connections,
+		}
+	}
+
+	return core.HNSWGraphState{
+		Nodes:      nodes,
+		EntryPoint: h.entrypoint,
+		MaxLayer:   h.maxLayer,
+		Size:       h.size,
+	}
+}
+
+// ImportGraphState imports graph structure from persistence, avoiding rebuild
+func (h *HNSW) ImportGraphState(state core.HNSWGraphState) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Clear existing data
+	h.nodes = make(map[uint64]*HNSWNode)
+	h.entrypoint = 0
+	h.maxLayer = -1
+	h.size = 0
+
+	// Import nodes
+	for id, nodeState := range state.Nodes {
+		// Deep copy connections
+		connections := make([]map[uint64]struct{}, len(nodeState.Connections))
+		for i, layerConns := range nodeState.Connections {
+			connections[i] = make(map[uint64]struct{})
+			for connID := range layerConns {
+				connections[i][connID] = struct{}{}
+			}
+		}
+
+		// Deep copy metadata
+		metadata := make(map[string]interface{})
+		for k, v := range nodeState.Metadata {
+			metadata[k] = v
+		}
+
+		// Deep copy vector
+		vector := make([]float32, len(nodeState.Vector))
+		copy(vector, nodeState.Vector)
+
+		h.nodes[id] = &HNSWNode{
+			ID:          nodeState.ID,
+			Vector:      vector,
+			Metadata:    metadata,
+			Deleted:     nodeState.Deleted,
+			Connections: connections,
+		}
+	}
+
+	// Import graph state
+	h.entrypoint = state.EntryPoint
+	h.maxLayer = state.MaxLayer
+	h.size = state.Size
+
+	// Update memory usage
+	h.updateMemoryUsage()
+
+	return nil
+}
+
 // min returns the minimum of two integers
 func min(a, b int) int {
 	if a < b {
