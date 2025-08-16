@@ -3,12 +3,12 @@
 # [server] 表定义了网络服务和认证相关的配置
 [server]
 # gRPC 服务监听的主机地址
-grpc_host = "127.0.0.1"
+grpc_host = "0.0.0.0"
 # gRPC 服务监听的端口
 grpc_port = 9090
 
 # HTTP/JSON 网关监听的主机地址 (通过 gRPC-Gateway 实现)
-http_host = "127.0.0.1"
+http_host = "0.0.0.0"
 # HTTP/JSON 网关监听的端口
 http_port = 8080
 
